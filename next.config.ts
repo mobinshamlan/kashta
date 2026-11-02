@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
+// Cache Components is off: the app uses the request-time model (route handlers
+// with fetch revalidation), which keeps forecast caching easy to reason about.
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
   turbopack: {
     rules: {
       "*.css": {
@@ -12,6 +11,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  poweredByHeader: false,
 };
 
 export default nextConfig;
