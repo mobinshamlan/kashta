@@ -1,0 +1,42 @@
+import type { ForecastResponse, NightSummary, PlanResponse, ScoreRow } from "./api-types";
+import { DESTINATIONS, estimateDrive } from "./destinations";
+import { loadForecast } from "./forecast-storage";
+import { upcomingNights } from "./nights";
+import { scoreNight } from "./score";
+import type { PlanPrefs } from "./types";
+
+const starSites = DESTINATIONS.filter(site => site.experiences.includes("stars") && estimateDrive(site).hours <= 5);
+
+/** Restore a complete comparison pool; never silently treat uncached sites as worse. */
+export function loadStarForecasts(): Record<string, ForecastResponse> | null {
+  const saved = starSites.map(site => loadForecast(site.slug));
+  if (saved.some(snapshot => !snapshot)) return null;
+  return Object.fromEntries(saved.map(snapshot => [snapshot!.data.slug, snapshot!.data]));
+}
+
+/** Reuse measured forecasts and the existing scoring rules for all three driving filters. */
+export function rankStarForecasts(forecasts: Record<string, ForecastResponse>, prefs: PlanPrefs, hours: number) {
+  const nights = upcomingNights();
+  const sites = starSites.filter(site => estimateDrive(site).hours <= hours && forecasts[site.slug]);
+  const metrics: Record<string, NightSummary> = {};
+  const results: ScoreRow[] = [];
+  for (const site of sites) {
+    for (const night of nights) {
+      const measurement = forecasts[site.slug].metrics.find(metric => metric.date === night);
+      if (!measurement) continue;
+      const { metrics: full, ...score } = scoreNight(site.slug, measurement, { ...prefs, experience: "stars", priorities: [] });
+      const { hours: _hours, ...summary } = full;
+      void _hours;
+      metrics[`${site.slug}|${night}`] = summary;
+      results.push(score);
+    }
+  }
+  results.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+  const timestamps = sites.map(site => forecasts[site.slug].fetchedAt).filter(time => Number.isFinite(Date.parse(time))).sort();
+  const data: Pick<PlanResponse, "nights" | "considered" | "results" | "metrics" | "forecastFetchedAt" | "airQuality"> = {
+    nights, considered: sites.map(site => site.slug), results, metrics,
+    forecastFetchedAt: timestamps[0] ?? null,
+    airQuality: { available: sites.some(site => forecasts[site.slug].airQuality.available), error: null },
+  };
+  return data;
+}

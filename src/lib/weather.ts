@@ -58,7 +58,7 @@ interface OpenMeteoLocation {
   hourly_units?: Record<string, string>;
 }
 
-async function getJson(url: string): Promise<OpenMeteoLocation[]> {
+async function getJson(url: string): Promise<{ locations: OpenMeteoLocation[]; fetchedAt: string }> {
   let res: Response;
   try {
     res = await fetch(url, {
@@ -73,8 +73,12 @@ async function getJson(url: string): Promise<OpenMeteoLocation[]> {
     }
     throw new WeatherError("upstream", "Could not reach Open-Meteo");
   }
-  if (res.status === 429) throw new WeatherError("rate_limited", "Open-Meteo rate limit reached");
-  if (!res.ok) throw new WeatherError("upstream", `Open-Meteo answered ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const reason = typeof body?.reason === "string" ? body.reason.slice(0, 200) : "";
+    console.warn("[weather] Provider request failed", { provider: new URL(url).host, status: res.status, reason });
+    throw new WeatherError(res.status === 429 ? "rate_limited" : "upstream", `Open-Meteo answered ${res.status}${reason ? `: ${reason}` : ""}`);
+  }
   let body: unknown;
   try {
     body = await res.json();
@@ -84,7 +88,12 @@ async function getJson(url: string): Promise<OpenMeteoLocation[]> {
   if (body && typeof body === "object" && "error" in body && (body as { error: unknown }).error) {
     throw new WeatherError("bad_response", String((body as { reason?: string }).reason ?? "error"));
   }
-  return Array.isArray(body) ? (body as OpenMeteoLocation[]) : [body as OpenMeteoLocation];
+  // The response Date survives Next's fetch cache; do not label a cached body as newly fetched.
+  const responseDate = Date.parse(res.headers.get("date") ?? "");
+  return {
+    locations: Array.isArray(body) ? (body as OpenMeteoLocation[]) : [body as OpenMeteoLocation],
+    fetchedAt: new Date(Number.isFinite(responseDate) ? responseDate : Date.now()).toISOString(),
+  };
 }
 
 function coordParams(coords: Coord[]) {
@@ -121,12 +130,12 @@ export async function fetchWeather(coords: Coord[]): Promise<WeatherBundle> {
 
   // Without the weather forecast there is nothing honest to show.
   if (forecastResult.status === "rejected") throw forecastResult.reason;
-  const forecast = forecastResult.value;
+  const forecast = forecastResult.value.locations;
   if (forecast.length !== coords.length) {
     throw new WeatherError("bad_response", "Open-Meteo returned an unexpected number of locations");
   }
 
-  const air = airResult.status === "fulfilled" ? airResult.value : null;
+  const air = airResult.status === "fulfilled" ? airResult.value.locations : null;
   const airError =
     airResult.status === "rejected"
       ? airResult.reason instanceof WeatherError
@@ -168,5 +177,5 @@ export async function fetchWeather(coords: Coord[]): Promise<WeatherBundle> {
     };
   });
 
-  return { fetchedAt: new Date().toISOString(), series, airError };
+  return { fetchedAt: forecastResult.value.fetchedAt, series, airError };
 }
