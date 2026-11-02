@@ -242,7 +242,7 @@ export function DestinationForecast({
         <h2 id="ai-heading" className="sr-only">
           {dict.plan.explainTitle}
         </h2>
-        <ExplainPanel key={`${slug}|${m.date}|${prefs.experience}|${locale}`} slug={slug} date={m.date} prefs={{ ...prefs, date: m.date }} onPacking={setAiPacking} />
+        <ExplainPanel slug={slug} date={m.date} prefs={{ ...prefs, date: m.date }} forecastKey={JSON.stringify([data.fetchedAt, m])} onPacking={setAiPacking} />
       </section>
 
       <section aria-labelledby="checklist-heading" className="mt-20">
