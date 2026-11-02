@@ -1,10 +1,19 @@
 "use client";
 
 import { RotateCcw } from "lucide-react";
+import type { CSSProperties } from "react";
 import type { ClientErrorCode } from "@/lib/client-api";
 import { rating, type Rating } from "@/lib/score";
 import type { Factor, FactorScore } from "@/lib/types";
 import { useI18n } from "./locale-provider";
+import { formatDayMonth } from "@/lib/i18n";
+
+export function CoverageNotice({ nights }: { nights: string[] }) {
+  const { locale, dict } = useI18n();
+  const dates = [...new Set(nights)];
+  if (!dates.length) return null;
+  return <p className="coverage-notice small my-4 border-s-2 border-olive ps-3 text-ink-2">{dict.plan.coverageNotice(dates.map(date => formatDayMonth(date, locale)).join(locale === "ar" ? "، " : ", "))}</p>;
+}
 
 export const RATING_COLOR: Record<Rating, string> = {
   excellent: "var(--color-good)",
@@ -43,8 +52,16 @@ export function ScoreFigure({ score, size = "md", dark = false }: { score: numbe
   const r = rating(score);
   const sizes = { sm: "lead", md: "sub", lg: "display" };
   return (
-    <div className="flex items-baseline gap-3">
-      <span className={`num font-light leading-none ${sizes[size]}`}>{score ?? "—"}</span>
+    <div className={`flex gap-3 ${size === "sm" ? "items-baseline" : "items-center"}`}>
+      <span className={size === "sm" ? "" : `score-orbit ${size === "lg" ? "score-orbit-lg" : ""}`}>
+        {size !== "sm" && (
+          <svg viewBox="0 0 88 88" aria-hidden="true" style={{ color: dark ? "var(--color-star)" : RATING_COLOR[r] }}>
+            <circle className="score-track" cx="44" cy="44" r="40" fill="none" stroke="currentColor" strokeWidth="2" />
+            {score !== null && <circle key={score} className="score-progress" cx="44" cy="44" r="40" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ "--score-offset": 251.33 * (1 - score / 100) } as CSSProperties} />}
+          </svg>
+        )}
+        <span className={`num font-light leading-none ${size === "lg" ? "text-[3.5rem]" : sizes[size]}`}>{score ?? "—"}</span>
+      </span>
       <span className="small font-medium" style={{ color: dark ? undefined : RATING_COLOR[r] }}>
         {dict.rating[r]}
       </span>
@@ -66,6 +83,7 @@ export function FactorBars({
   const track = dark ? "bg-night-3" : "bg-sand-3";
   const fill = dark ? "bg-star" : "bg-ink";
   return (
+    <div>
     <ul className="flex flex-col gap-4">
       {factors.map((f) => (
         <li key={f.factor}>
@@ -84,18 +102,22 @@ export function FactorBars({
           </div>
           <div className="mt-1.5 flex items-center gap-3">
             <div className={`h-2 flex-1 ${track}`} aria-hidden>
-              {f.score !== null && <div className={`h-full ${fill}`} style={{ width: `${f.score}%` }} />}
+              {f.score !== null && <div key={f.score} className={`factor-fill h-full ${fill}`} style={{ width: `${f.score}%` }} />}
             </div>
             <span className="small num w-16 text-end">
               {f.score === null ? dict.plan.missing : `${f.score}/100`}
             </span>
           </div>
-          <p className={`small mt-1 ${dark ? "text-star-2" : "text-ink-2"}`}>
-            {dict.factorHint[f.factor]} · {dict.plan.weight} {Math.round(f.weight * 100)}%
-          </p>
         </li>
       ))}
     </ul>
+    <details className="small mt-5 border-t border-current/20 pt-3">
+      <summary className="min-h-11 py-2 font-medium">{dict.plan.weightDetails}</summary>
+      <ul className={`mt-3 space-y-3 ${dark ? "text-star-2" : "text-ink-2"}`}>
+        {factors.map(factor => <li key={factor.factor}><span className="font-medium">{dict.factor[factor.factor]} · {Math.round(factor.weight * 100)}%</span><p>{dict.factorHint[factor.factor]}</p></li>)}
+      </ul>
+    </details>
+    </div>
   );
 }
 

@@ -1,17 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ForecastResponse } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { formatDayMonth, formatNight, formatWeekday } from "@/lib/i18n";
 import { loadPrefs } from "@/lib/prefs-storage";
+import { loadForecast, rememberForecast } from "@/lib/forecast-storage";
 import { rating, scoreNight } from "@/lib/score";
 import type { Experience, PlanPrefs } from "@/lib/types";
 import { ChecklistPanel } from "./checklist-panel";
 import { ExplainPanel } from "./explain-panel";
 import { useI18n } from "./locale-provider";
 import { NightChart } from "./night-chart";
-import { ErrorState, FactorBars, MoonGlyph, RATING_COLOR, ScoreFigure, Skeleton } from "./ui";
+import { CoverageNotice, ErrorState, FactorBars, MoonGlyph, RATING_COLOR, ScoreFigure, Skeleton } from "./ui";
 
 export function DestinationForecast({
   slug,
@@ -29,19 +30,33 @@ export function DestinationForecast({
   const [prefs, setPrefs] = useState<PlanPrefs | null>(null);
   const [night, setNight] = useState<string | null>(initialNight ?? null);
   const [aiPacking, setAiPacking] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<ClientErrorCode | null>(null);
+  const nightStrip = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    setState({ s: "loading" });
+    setRefreshing(true);
+    setRefreshError(null);
     const res = await callApi<ForecastResponse>(`/api/forecast?slug=${encodeURIComponent(slug)}`);
-    setState(res.ok ? { s: "ok", data: res.data } : { s: "error", code: res.code });
+    if (res.ok) {
+      const saved = loadForecast(slug);
+      rememberForecast(res.data, saved?.prefs ?? loadPrefs());
+      setState({ s: "ok", data: res.data });
+    } else {
+      setRefreshError(res.code);
+      setState(previous => previous.s === "ok" ? previous : { s: "error", code: res.code });
+    }
+    setRefreshing(false);
   }, [slug]);
 
   useEffect(() => {
-    const p = loadPrefs();
+    const saved = loadForecast(slug);
+    const p = initialNight && saved ? saved.prefs : loadPrefs();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPrefs(initialExperience ? { ...p, experience: initialExperience } : p);
+    if (saved) setState({ s: "ok", data: saved.data });
     void load();
-  }, [load, initialExperience]);
+  }, [load, initialExperience, initialNight, slug]);
 
   const scores = useMemo(() => {
     if (state.s !== "ok" || !prefs) return [];
@@ -50,6 +65,14 @@ export function DestinationForecast({
       stars: scoreNight(slug, m, { ...prefs, experience: "stars" }),
     }));
   }, [state, prefs, slug]);
+
+  useEffect(() => {
+    const strip = nightStrip.current;
+    const selected = strip?.querySelector<HTMLInputElement>("input:checked")?.parentElement;
+    if (!strip || !selected || strip.scrollWidth <= strip.clientWidth) return;
+    const offset = selected.getBoundingClientRect().left - strip.getBoundingClientRect().left - (strip.clientWidth - selected.clientWidth) / 2;
+    strip.scrollBy({ left: offset, behavior: "instant" });
+  }, [state, night, prefs?.experience]);
 
   if (state.s === "loading" || !prefs) {
     return (
@@ -64,7 +87,7 @@ export function DestinationForecast({
       </div>
     );
   }
-  if (state.s === "error") return <ErrorState code={state.code} onRetry={load} />;
+  if (state.s === "error") return <ErrorState code={state.code} onRetry={refreshing ? undefined : load} />;
 
   const { data } = state;
   const valid = night && data.nights.includes(night) ? night : null;
@@ -81,6 +104,13 @@ export function DestinationForecast({
 
   return (
     <div>
+      <div className="small mb-5 flex flex-wrap items-center justify-between gap-3 text-ink-2" aria-live="polite">
+        <p>{dict.common.updated} <time dateTime={data.fetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(data.fetchedAt))}</time></p>
+        <button type="button" className="btn-quiet" onClick={load} disabled={refreshing}>{refreshing ? dict.detail.refreshing : dict.detail.refresh}</button>
+      </div>
+      {refreshError && <div role="status" className="mb-5 border-s-2 border-olive bg-sand-2 p-4"><p>{dict.detail.refreshFailed}</p><p className="small mt-1 text-ink-2">{dict.errors[refreshError]}</p></div>}
+      <CoverageNotice nights={data.nights.filter((_, index) => scores[index][prefs.experience].assessment === "incomplete")} />
+      {initialNight && !valid && <p className="small mb-4 text-ink-2">{dict.detail.nightExpired}</p>}
       <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={dict.detail.useExperience}>
         <span className="small me-2 text-ink-2">{dict.detail.useExperience}</span>
         {(["kashta", "stars"] as const).map((x) => (
@@ -97,7 +127,7 @@ export function DestinationForecast({
       {/* Seven nights as a strip of tiles; each is a real radio button. */}
       <fieldset className="mt-6 min-w-0">
         <legend className="sr-only">{dict.detail.forecast}</legend>
-        <div className="-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-2 md:grid md:grid-cols-7 md:overflow-visible">
+        <div ref={nightStrip} className="-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-2 md:grid md:grid-cols-7 md:overflow-visible">
           {data.nights.map((n, i) => {
             const s = scores[i][prefs.experience];
             const r = rating(s.score);
@@ -106,8 +136,8 @@ export function DestinationForecast({
             return (
               <label
                 key={n}
-                className={`relative flex min-w-[7.5rem] snap-start flex-col gap-1 p-3 transition-colors md:min-w-0 ${
-                  on ? "bg-ink text-sand" : "bg-sand-2 hover:bg-sand-3"
+                className={`night-choice relative flex min-w-[7.5rem] snap-start flex-col gap-1 p-3 transition-colors md:min-w-0 ${
+                  on ? "bg-olive text-sand" : "bg-sand-2 hover:bg-sand-3"
                 }`}
               >
                 <input

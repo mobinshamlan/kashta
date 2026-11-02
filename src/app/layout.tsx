@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { Aref_Ruqaa, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { LocaleProvider } from "@/components/locale-provider";
 import { RevealRoot } from "@/components/reveal-root";
 import { SiteFooter } from "@/components/site-footer";
@@ -11,6 +11,13 @@ const plex = IBM_Plex_Sans_Arabic({
   variable: "--font-plex",
   subsets: ["arabic", "latin"],
   weight: ["300", "400", "500", "600"],
+  display: "swap",
+});
+
+const ruqaa = Aref_Ruqaa({
+  variable: "--font-ruqaa",
+  subsets: ["arabic", "latin"],
+  weight: "400",
   display: "swap",
 });
 
@@ -26,13 +33,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#e6ded1",
+  themeColor: "#e9e1d2",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const { locale, dict } = await getDict();
   return (
-    <html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"} className={plex.variable} suppressHydrationWarning>
+    <html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"} className={`${plex.variable} ${ruqaa.variable}`} data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         {/* Marks the page as scripted so entrance animations can hide content until it scrolls in. */}
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />

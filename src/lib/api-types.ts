@@ -13,6 +13,7 @@ export interface PlanResponse {
   airQuality: { available: boolean; error: WeatherErrorCode | null };
   results: ScoreRow[];
   metrics: Record<string, NightSummary>;
+  forecasts: Record<string, ForecastResponse>;
 }
 
 export interface ForecastResponse {

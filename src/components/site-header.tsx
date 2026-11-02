@@ -6,12 +6,16 @@ import { useEffect, useId, useState, useTransition } from "react";
 import { Menu, X } from "lucide-react";
 import { LOCALE_COOKIE } from "@/lib/i18n";
 import { useI18n } from "./locale-provider";
+import { BrandMark } from "./brand-mark";
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`inline-flex items-baseline gap-2 font-medium ${className}`}>
-      <span className="text-[1.35em] leading-none">كشتة</span>
-      <span className="text-[0.7em] font-normal tracking-[0.18em]">KASHTA</span>
+    <span className={`brand-wordmark ${className}`}>
+      <BrandMark className="brand-emblem text-clay" />
+      <span className="brand-lettering">
+        <span lang="ar" className="brand-arabic">كشتة</span>
+        <span lang="en" dir="ltr" className="brand-latin">KASHTA</span>
+      </span>
     </span>
   );
 }
@@ -62,9 +66,9 @@ export function SiteHeader() {
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <header className={`relative z-40 ${dark ? "on-dark bg-night text-star" : "bg-sand text-ink"}`}>
+    <header className={`site-header sticky top-0 z-40 ${dark ? "on-dark bg-night text-star" : "bg-sand text-ink"}`}>
       <div className="frame flex h-16 items-center justify-between gap-6 lg:h-[4.5rem]">
-        <Link href="/" className="min-h-11 inline-flex items-center" aria-label="KASHTA كشتة">
+        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label="KASHTA كشتة">
           <Wordmark />
         </Link>
 
