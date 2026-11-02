@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ArrowDown, ArrowUpLeft, ExternalLink, MapPin, Moon, Wind } from "lucide-react";
+import { BrandMark } from "@/components/brand-mark";
 import { StagePhoto } from "@/components/stage-photo";
 import { WeekStrip } from "@/components/week-strip";
 import { DESTINATIONS, estimateDrive, NABATI_URL, NCVC_GUIDE_AR } from "@/lib/destinations";
@@ -39,12 +40,14 @@ export default async function Home() {
       {/* The split stage: reading column on the start side, a fixed photograph on the other. */}
       <div className="flex flex-col lg:grid lg:grid-cols-2">
         <div className="frame pb-24 lg:pb-40">
-          <section data-stage="0" className="flex flex-col justify-center pb-8 pt-8 md:pt-14 lg:min-h-[calc(100svh-4.5rem)] lg:py-20">
-            <h1 className="display max-w-[11ch]">{t.h1}</h1>
-            <p className="lead mt-6 max-w-[40ch] text-ink md:mt-8">{t.lead}</p>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 md:mt-10">
+          <section data-stage="0" className="home-hero flex flex-col justify-center pb-8 pt-8 md:pt-14 lg:min-h-[calc(100svh-4.5rem)] lg:py-16">
+            <p className="hero-location small flex items-center gap-2 text-olive"><MapPin size={15} aria-hidden />{locale === "ar" ? "من الرياض، للبرّ" : "From Riyadh, into the open"}</p>
+            <h1 className="hero-title display mt-6 whitespace-pre-line">{t.h1}</h1>
+            <p className="hero-copy mt-6 max-w-[40ch] text-ink-2 md:mt-8">{t.lead}</p>
+            <div className="hero-actions mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 md:mt-10">
               <Link href="/plan" className="btn">
                 {dict.common.planCta}
+                <ArrowUpLeft aria-hidden size={19} className="direction-arrow" />
               </Link>
               <Link href="/stars" className="link inline-flex min-h-11 items-center">
                 {t.secondary}
@@ -53,7 +56,12 @@ export default async function Home() {
                 {dict.nav.destinations}
               </Link>
             </div>
-            <figure className="relative -mx-[clamp(1.25rem,3.2vw,3rem)] mt-10 aspect-[4/3] overflow-hidden bg-ink md:aspect-[16/9] lg:hidden">
+            <div className="hero-facts small mt-10 flex flex-wrap gap-x-6 gap-y-3 border-t border-ink/15 pt-5 text-ink-2">
+              <span className="inline-flex items-center gap-2"><Moon size={16} aria-hidden />{locale === "ar" ? "٧ ليالٍ قدّامك" : "Seven nights ahead"}</span>
+              <span className="inline-flex items-center gap-2"><Wind size={16} aria-hidden />{locale === "ar" ? "توقعات فعلية، قرار أوضح" : "Real forecasts. A clearer choice."}</span>
+            </div>
+            <a href="#week-heading" className="hero-scroll small mt-8 hidden items-center gap-2 self-start text-olive lg:inline-flex"><ArrowDown size={16} aria-hidden />{locale === "ar" ? "شف ليالي هالأسبوع" : "Explore this week"}</a>
+            <figure className="hero-mobile-photo relative mt-8 aspect-[4/3] overflow-hidden bg-ink md:aspect-[16/9] lg:hidden">
               <Image
                 src={PHOTOS["dahna-ridge"].src}
                 alt={PHOTOS["dahna-ridge"].alt[locale]}
@@ -103,6 +111,11 @@ export default async function Home() {
         <div className="hidden lg:block">
           <StagePhoto photos={["dahna-ridge", "camp-night", "tuwaiq-canyon", "tuwaiq-haze", "dahna-crest"]} />
         </div>
+      </div>
+
+      <div className="brand-divider frame flex flex-wrap items-center justify-between gap-4 bg-olive py-6 text-sand">
+        <p className="lead">{locale === "ar" ? "قهوة على الجمر، وباقي السالفة عليك." : "Coffee over the embers. The rest is your story."}</p>
+        <BrandMark className="h-10 w-14 shrink-0" />
       </div>
 
       {/* Input half, output half: the description the user writes and the settings it becomes. */}

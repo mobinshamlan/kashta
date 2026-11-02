@@ -3,7 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import { Minus, Plus, Wand2 } from "lucide-react";
+import { ArrowUpLeft, Compass, LoaderCircle, Minus, Plus, Wand2 } from "lucide-react";
+import { BrandMark } from "./brand-mark";
+import { rememberPlanForecasts } from "@/lib/forecast-storage";
+import { incompleteForecastDates, recommendationHighlights } from "@/lib/recommendation-summary";
 import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { getDestination, estimateDrive } from "@/lib/destinations";
@@ -16,7 +19,7 @@ import { upcomingNights } from "@/lib/nights";
 import type { Factor, PlanPrefs } from "@/lib/types";
 import { ExplainPanel, useAiStatus } from "./explain-panel";
 import { useI18n } from "./locale-provider";
-import { ErrorState, FactorBars, RATING_COLOR, ScoreFigure, Skeleton } from "./ui";
+import { CoverageNotice, ErrorState, FactorBars, RATING_COLOR, ScoreFigure, Skeleton } from "./ui";
 
 type Field = keyof Omit<PlanPrefs, "city">;
 
@@ -121,9 +124,10 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
   const submit = async (p: PlanPrefs) => {
       setPlan({ s: "loading" });
       setSelected(null);
-      requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" }));
       const res = await callApi<PlanResponse>("/api/plan", { method: "POST", body: JSON.stringify(p) });
       if (res.ok) {
+        rememberPlanForecasts(res.data, p);
         setPlan({ s: "ok", data: res.data, prefs: p });
         const first = res.data.results.find((r) => r.score !== null) ?? res.data.results[0];
         setSelected(first ? `${first.slug}|${first.date}` : null);
@@ -149,8 +153,8 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
   const legend = "mb-3 font-medium";
 
   return (
-    <div className="grid gap-16 lg:grid-cols-[minmax(0,26rem)_1fr] lg:gap-20">
-      <form onSubmit={onSubmit} noValidate className="flex min-w-0 flex-col gap-10" aria-label={t.title}>
+    <div className="grid gap-12 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)] lg:gap-12 xl:gap-16">
+      <form onSubmit={onSubmit} noValidate className="planner-form flex min-w-0 flex-col gap-7" aria-label={t.title}>
         {/* Natural-language description, read by Llama. */}
         <div>
           <label htmlFor={`${formId}-text`} className={`${legend} block`}>
@@ -172,7 +176,7 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
               onClick={runInterpret}
               disabled={ai !== true || interpret.s === "loading"}
             >
-              <Wand2 aria-hidden size={18} />
+              {interpret.s === "loading" ? <LoaderCircle aria-hidden size={18} className="animate-spin" /> : <Wand2 aria-hidden size={18} />}
               {interpret.s === "loading" ? t.describing : t.describeButton}
             </button>
             <span className="small num text-ink-2">{text.length}/600</span>
@@ -295,6 +299,7 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
               </label>
             ))}
           </div>
+          {plan.s === "ok" ? <CoverageNotice nights={incompleteForecastDates(plan.data.forecasts, prefs)} /> : <p className="small mt-3 text-ink-2">{t.coverageHint}</p>}
         </fieldset>
 
         <div>
@@ -348,7 +353,7 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
           </div>
         </fieldset>
 
-        <fieldset>
+        <fieldset aria-describedby={`${formId}-priorities-hint`}>
           <legend className={legend}>
             {t.prioritiesLabel}
             <AppliedTag on={applied.has("priorities")} label={t.applied} />
@@ -372,18 +377,20 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
               );
             })}
           </div>
+          <p id={`${formId}-priorities-hint`} className="small mt-3 text-ink-2" role="status">{prefs.priorities.length === 3 ? t.prioritiesLimit : t.prioritiesCount(prefs.priorities.length)}</p>
         </fieldset>
 
         <button type="submit" className="btn w-full" disabled={plan.s === "loading"}>
+          {plan.s === "loading" ? <LoaderCircle aria-hidden size={19} className="animate-spin" /> : <Compass aria-hidden size={19} />}
           {plan.s === "loading" ? t.submitting : t.submit}
         </button>
       </form>
 
-      <div ref={resultsRef} className="min-w-0 scroll-mt-6" aria-live="polite" aria-busy={plan.s === "loading"}>
-        <h2 className="sub">{t.resultsTitle}</h2>
+      <div ref={resultsRef} data-state={plan.s} className="planner-results min-w-0 scroll-mt-28" aria-live="polite" aria-busy={plan.s === "loading"}>
+        <h2 className="planner-step sub"><span className="num" aria-hidden>02</span>{t.resultsTitle}</h2>
         {plan.s === "idle" && (
           <div className="mt-6">
-            <div className="relative aspect-[16/10] overflow-hidden">
+            <div className="planner-empty-photo relative aspect-[2/1] max-h-64 overflow-hidden">
               <Image
                 src={PHOTOS["dahna-crest"].src}
                 alt={PHOTOS["dahna-crest"].alt[locale]}
@@ -392,13 +399,14 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
                 className="object-cover"
               />
             </div>
+            <p className="planner-empty-caption small text-ink-2"><BrandMark className="h-7 w-8 shrink-0" />{PHOTOS["dahna-crest"].caption[locale]}</p>
             <p className="lead mt-6">{t.emptyTitle}</p>
             <p className="mt-2 max-w-[48ch] text-ink-2">{t.emptyBody}</p>
           </div>
         )}
         {plan.s === "loading" && (
           <div className="mt-6 flex flex-col gap-3">
-            <span className="sr-only">{dict.common.loading}</span>
+            <p className="small flex items-center gap-2 pb-3 text-olive"><LoaderCircle aria-hidden size={17} className="animate-spin" />{dict.common.loading}</p>
             <Skeleton className="h-40" />
             <Skeleton className="h-16" />
             <Skeleton className="h-16" />
@@ -416,6 +424,27 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
 
 function AppliedTag({ on, label }: { on: boolean; label: string }) {
   return on ? <span className="small ms-2 bg-clay px-1.5 py-0.5 text-clay-ink">{label}</span> : null;
+}
+
+function BestPick({ row, prefs }: { row: ScoreRow; prefs: PlanPrefs }) {
+  const { locale, dict } = useI18n();
+  const destination = getDestination(row.slug)!;
+  const { strongest, tradeoff } = recommendationHighlights(row.factors);
+  return (
+    <section className="best-pick mt-6 rounded-md border border-olive/30 bg-sand-2 p-5" aria-label={dict.plan.bestSummary}>
+      <p className="small font-medium text-olive">{row.score === null ? dict.plan.availableComparison : dict.plan.bestSummary}</p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+        <div><h3 className="lead font-medium">{destination.name[locale]}</h3><p className="small mt-1 text-ink-2">{formatNight(row.date, locale)}</p></div>
+        <ScoreFigure score={row.score} size="sm" />
+      </div>
+      {row.score === null ? <p className="mt-4">{dict.plan.incompleteNote} {row.missing.map(factor => dict.factor[factor]).join("، ")}</p> : <>
+        {strongest && <p className="mt-4">{dict.plan.summaryFactor} {dict.factor[strongest.factor]}: <bdi className="num">{strongest.value}</bdi>.</p>}
+        <p className="small mt-2 text-ink-2">{dict.plan.summaryTradeoff} {tradeoff ? <>{dict.factor[tradeoff.factor]}: <bdi className="num">{tradeoff.value}</bdi> ({tradeoff.score}/100).</> : dict.plan.summaryDrive(estimateDrive(destination).hours)}</p>
+      </>}
+      {row.dealbreakers.length > 0 && <p className="small mt-3 text-poor">{dict.plan.dealbreaker}: {row.dealbreakers.map(factor => dict.factor[factor]).join("، ")}</p>}
+      <Link href={`/destinations/${row.slug}?night=${row.date}&exp=${prefs.experience}`} className="link mt-4 inline-flex min-h-11 items-center font-medium">{dict.common.viewDestination}</Link>
+    </section>
+  );
 }
 
 function Results({
@@ -443,15 +472,17 @@ function Results({
   const selDest = sel ? getDestination(sel.slug) : undefined;
 
   return (
-    <div className="mt-4">
+    <div className="results-enter mt-4">
       <p className="text-ink-2">
         {t.resultsLead(data.considered.length, nightsShown.length)}{" "}
         {data.excludedByDistance.length > 0 && t.excluded(data.excludedByDistance.length)}
       </p>
       {!data.airQuality.available && <p className="mt-2 bg-sand-2 p-3">{t.airDown}</p>}
+      <CoverageNotice nights={incompleteForecastDates(data.forecasts, prefs)} />
+      {top[0] && <BestPick row={top[0]} prefs={prefs} />}
 
       <h3 className="mt-10 mb-3 font-medium">{t.topPicks}</h3>
-      <ol role="list">
+      <ol role="list" className="recommendation-list">
         {top.map((r, i) => {
           const d = getDestination(r.slug)!;
           const k = `${r.slug}|${r.date}`;
@@ -463,8 +494,8 @@ function Results({
                 type="button"
                 aria-pressed={!!on}
                 onClick={() => onSelect(k)}
-                className={`grid min-h-16 w-full grid-cols-[2rem_1fr_auto] items-center gap-4 px-3 py-3 text-start transition-colors ${
-                  on ? "bg-ink text-sand" : "hover:bg-sand-2"
+                className={`recommendation-choice grid min-h-16 w-full grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 text-start transition-colors ${
+                  on ? "bg-olive text-sand" : "hover:bg-sand-2"
                 }`}
               >
                 <span className="num opacity-70">{i + 1}</span>
@@ -487,7 +518,7 @@ function Results({
       </ol>
 
       {sel && selDest && (
-        <section className="mt-10 bg-sand-2 p-6 md:p-8" aria-labelledby="sel-heading">
+        <section key={`${sel.slug}|${sel.date}`} className="recommendation-detail results-enter mt-8 bg-sand-2 p-5 md:p-8" aria-labelledby="sel-heading">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
               <h3 id="sel-heading" className="sub">
@@ -517,9 +548,10 @@ function Results({
           </div>
           <Link
             href={`/destinations/${sel.slug}?night=${sel.date}&exp=${prefs.experience}`}
-            className="link mt-8 inline-flex min-h-11 items-center font-medium"
+            className="btn mt-8 inline-flex min-h-11 items-center font-medium"
           >
             {t.openChecklist}
+            <ArrowUpLeft aria-hidden size={18} className="direction-arrow" />
           </Link>
         </section>
       )}

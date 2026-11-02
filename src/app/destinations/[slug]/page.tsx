@@ -36,15 +36,15 @@ export default async function DestinationPage({ params, searchParams }: PageProp
   return (
     <article>
       {/* Hero: the photograph full-bleed with the name set below it, never on top of it. */}
-      <div className="relative h-[58svh] min-h-[22rem] overflow-hidden bg-ink md:h-[72svh]">
+      <div className="destination-hero relative overflow-hidden bg-ink">
         <Image src={photo.src} alt={photo.alt[locale]} fill priority sizes="100vw" className="drift object-cover" />
-        <p className="small absolute bottom-0 start-0 m-4 bg-ink/80 px-3 py-1.5 text-sand">
+        <p className="small absolute bottom-0 start-0 z-10 m-4 bg-ink/80 px-3 py-1.5 text-sand">
           {dict.common.photoNote}: {photo.caption[locale]}
         </p>
       </div>
 
       <div className="frame">
-        <header className="grid gap-8 pb-16 pt-10 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:gap-16 lg:pt-14">
+        <header className="destination-intro grid gap-8 pb-12 pt-10 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:gap-16 lg:pt-14">
           <div>
             <nav aria-label={dict.common.back} className="small mb-6">
               <Link className="link" href="/destinations">
@@ -54,7 +54,7 @@ export default async function DestinationPage({ params, searchParams }: PageProp
             <h1 className="display max-w-[14ch]">{d.name[locale]}</h1>
             <p className="lead mt-6 max-w-[46ch]">{d.description[locale]}</p>
           </div>
-          <dl className="grid content-end gap-x-8 gap-y-5 sm:grid-cols-2">
+          <dl className="destination-facts grid content-center gap-x-8 gap-y-5 sm:grid-cols-2">
             <div>
               <dt className="small text-ink-2">{dict.detail.governorate}</dt>
               <dd className="mt-1 lead">{d.governorate[locale]}</dd>

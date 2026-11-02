@@ -78,8 +78,8 @@ export function DestinationIndex() {
       {list.length === 0 && <p className="lead mt-10 bg-sand-2 p-8">{dict.destinations.empty}</p>}
 
       {lead && (
-        <Link href={`/destinations/${lead.slug}`} className="group mt-8 grid gap-6 md:grid-cols-[1.4fr_1fr] md:gap-10">
-          <div className="relative aspect-[16/10] overflow-hidden bg-ink">
+        <Link href={`/destinations/${lead.slug}`} className="destination-card group mt-8 grid gap-6 pb-8 md:grid-cols-[1.4fr_1fr] md:gap-10">
+          <div className="destination-lead-image relative aspect-[16/10] overflow-hidden bg-ink">
             <Image
               src={PHOTOS[lead.photo].src}
               alt={PHOTOS[lead.photo].alt[locale]}
@@ -108,7 +108,7 @@ export function DestinationIndex() {
           const drive = estimateDrive(d);
           return (
             <li key={d.slug} data-reveal style={{ ["--i" as string]: i % 4 }}>
-              <Link href={`/destinations/${d.slug}`} className="group grid grid-cols-[6.5rem_1fr] items-center gap-5 py-3 transition-colors hover:bg-sand-2 sm:grid-cols-[8.5rem_1fr]">
+              <Link href={`/destinations/${d.slug}`} className="destination-card group grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-5 py-5 transition-colors hover:bg-sand-2 sm:grid-cols-[8.5rem_minmax(0,1fr)]">
                 <div className="relative aspect-[4/3] overflow-hidden bg-ink">
                   <Image
                     src={PHOTOS[d.photo].src}

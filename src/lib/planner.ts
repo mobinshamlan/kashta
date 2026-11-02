@@ -1,10 +1,11 @@
 import "server-only";
 import { DESTINATIONS, estimateDrive } from "./destinations";
-import { computeNight, upcomingNights } from "./nights";
+import { upcomingNights } from "./nights";
 import { scoreNight } from "./score";
-import type { PlanResponse, NightSummary } from "./api-types";
+import type { ForecastResponse, PlanResponse, NightSummary } from "./api-types";
 import type { Destination, NightScore, PlanPrefs } from "./types";
-import { fetchWeather, type WeatherErrorCode } from "./weather";
+import type { WeatherErrorCode } from "./weather";
+import { fetchSiteForecasts } from "./site-forecasts";
 
 export function sortScores(a: NightScore, b: NightScore) {
   if (a.score === null && b.score === null) return 0;
@@ -17,15 +18,16 @@ export function sortScores(a: NightScore, b: NightScore) {
 export async function scoreDestinations(
   prefs: PlanPrefs,
   destinations: Destination[] = DESTINATIONS,
-): Promise<{ scores: NightScore[]; nights: string[]; fetchedAt: string; airError: WeatherErrorCode | null; airAvailable: boolean }> {
+): Promise<{ scores: NightScore[]; nights: string[]; fetchedAt: string; airError: WeatherErrorCode | null; airAvailable: boolean; forecasts: Record<string, ForecastResponse> }> {
   const nights = upcomingNights();
-  const weather = await fetchWeather(destinations.map((d) => ({ lat: d.lat, lon: d.lon })));
+  const available = await fetchSiteForecasts();
+  const forecasts = Object.fromEntries(destinations.map(destination => [destination.slug, available[destination.slug]]));
   const wanted = prefs.date === "flexible" ? nights : nights.filter((n) => n === prefs.date);
 
   const scores: NightScore[] = [];
-  destinations.forEach((d, i) => {
+  destinations.forEach((d) => {
     for (const date of wanted) {
-      const m = computeNight(weather.series[i].hours, date, d.lat, d.lon);
+      const m = forecasts[d.slug].metrics.find(metric => metric.date === date)!;
       scores.push(scoreNight(d.slug, m, prefs));
     }
   });
@@ -33,9 +35,10 @@ export async function scoreDestinations(
   return {
     scores,
     nights,
-    fetchedAt: weather.fetchedAt,
-    airError: weather.airError,
-    airAvailable: weather.series.some((s) => s.airAvailable),
+    fetchedAt: available[DESTINATIONS[0].slug].fetchedAt,
+    airError: available[DESTINATIONS[0].slug].airQuality.error,
+    airAvailable: Object.values(forecasts).some(forecast => forecast.airQuality.available),
+    forecasts,
   };
 }
 
@@ -58,9 +61,9 @@ export async function buildPlan(prefs: PlanPrefs): Promise<PlanResponse> {
     excludedByDistance: excluded,
   };
   if (considered.length === 0) {
-    return { ...base, forecastFetchedAt: null, nights: upcomingNights(), airQuality: { available: false, error: null }, results: [], metrics: {} };
+    return { ...base, forecastFetchedAt: null, nights: upcomingNights(), airQuality: { available: false, error: null }, results: [], metrics: {}, forecasts: {} };
   }
-  const { scores, nights, fetchedAt, airError, airAvailable } = await scoreDestinations(prefs, considered);
+  const { scores, nights, fetchedAt, airError, airAvailable, forecasts } = await scoreDestinations(prefs, considered);
   const metrics: Record<string, NightSummary> = {};
   const results = scores.map(({ metrics: m, ...rest }) => {
     const { hours: _hours, ...summary } = m;
@@ -75,5 +78,6 @@ export async function buildPlan(prefs: PlanPrefs): Promise<PlanResponse> {
     airQuality: { available: airAvailable, error: airError },
     results,
     metrics,
+    forecasts,
   };
 }

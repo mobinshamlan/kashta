@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { PHOTOS } from "@/lib/photos";
 import type { PhotoKey } from "@/lib/types";
 import { useI18n } from "./locale-provider";
+import { BrandMark } from "./brand-mark";
 
 /**
  * The fixed half of the split stage. Each reading section carries data-stage="<index>";
@@ -32,7 +33,8 @@ export function StagePhoto({ photos }: { photos: PhotoKey[] }) {
   const current = PHOTOS[photos[active]];
 
   return (
-    <div className="relative h-[62svh] overflow-hidden bg-ink lg:sticky lg:top-0 lg:h-svh">
+    <div className="stage-photo relative h-[62svh] overflow-hidden bg-ink lg:sticky lg:top-[4.5rem] lg:h-[calc(100svh-4.5rem)]">
+      <div className="relative h-full w-full">
       {photos.map((key, i) => {
         const p = PHOTOS[key];
         return (
@@ -48,9 +50,16 @@ export function StagePhoto({ photos }: { photos: PhotoKey[] }) {
           />
         );
       })}
-      <p className="small absolute bottom-0 start-0 m-4 bg-ink/80 px-3 py-1.5 text-sand" aria-live="polite">
-        {current.caption[locale]}
-      </p>
+      </div>
+      <div className="stage-scrim pointer-events-none absolute inset-0" />
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-8 text-white/90">
+        <BrandMark className="h-12 w-14" />
+        <span className="small">{locale === "ar" ? "على مهل البرّ" : "At the desert’s pace"}</span>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 p-8 text-white">
+        <p className="stage-title mb-5">{locale === "ar" ? "وسّع صدرك." : "Room to breathe."}</p>
+        <p className="small border-t border-white/35 pt-4" aria-live="polite">{current.caption[locale]}</p>
+      </div>
     </div>
   );
 }

@@ -98,7 +98,7 @@ export function ExplainPanel({
           <Sparkles aria-hidden size={18} />
           {state.s === "loading" ? dict.plan.explaining : dict.plan.explain}
         </button>
-        <span className={`small ${muted}`}>Llama 4 Scout</span>
+        <span className={`text-xs ${muted}`}>{locale === "ar" ? "بمساعدة Llama" : "With Llama"}</span>
       </div>
       {ai === false && (
         <p id={`ai-off-${slug}`} className={`small mt-3 max-w-[56ch] ${muted}`}>
