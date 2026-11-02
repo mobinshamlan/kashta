@@ -33,33 +33,38 @@ export function useAiStatus() {
   return configured;
 }
 
-export function ExplainPanel({
-  slug,
-  date,
-  prefs,
-  onPacking,
-  dark = false,
-}: {
+interface ExplainPanelProps {
   slug: string;
   date: string;
   prefs: PlanPrefs;
+  /** Stable fingerprint of the forecast values used to generate this explanation. */
+  forecastKey: string;
   onPacking?: (items: string[]) => void;
   dark?: boolean;
-}) {
-  const { locale, dict } = useI18n();
+}
+
+export function ExplainPanel(props: ExplainPanelProps) {
+  const { locale } = useI18n();
+  // Key the stateful panel by every value sent to Llama and the forecast facts it must explain.
+  // A changed key remounts the panel, hiding old text immediately and aborting old requests.
+  const inputKey = JSON.stringify([props.slug, props.date, props.prefs, locale, props.forecastKey]);
+  return <ExplainPanelContent key={inputKey} {...props} locale={locale} />;
+}
+
+function ExplainPanelContent({
+  slug,
+  date,
+  prefs,
+  locale,
+  onPacking,
+  dark = false,
+}: ExplainPanelProps & { locale: "ar" | "en" }) {
+  const { dict } = useI18n();
   const ai = useAiStatus();
   const pending = useRef<AbortController | null>(null);
   const [state, setState] = useState<
     { s: "idle" } | { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: ExplainResponse }
   >({ s: "idle" });
-
-  // A different site or night invalidates the previous explanation.
-  const key = `${slug}|${date}|${prefs.experience}`;
-  const [lastKey, setLastKey] = useState(key);
-  if (key !== lastKey) {
-    setLastKey(key);
-    setState({ s: "idle" });
-  }
 
   useEffect(() => () => pending.current?.abort(), []);
 

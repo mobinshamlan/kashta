@@ -40,7 +40,7 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
   const [groupInput, setGroupInput] = useState(String(DEFAULT_PREFS.groupSize));
   const [groupError, setGroupError] = useState(false);
   const [plan, setPlan] = useState<
-    { s: "idle" } | { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: PlanResponse; prefs: PlanPrefs }
+    { s: "idle" } | { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: PlanResponse; prefs: PlanPrefs; refreshing?: boolean; refreshError?: ClientErrorCode }
   >({ s: "idle" });
   const [selected, setSelected] = useState<string | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -122,7 +122,7 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
   };
 
   const submit = async (p: PlanPrefs) => {
-      setPlan({ s: "loading" });
+      setPlan(previous => previous.s === "ok" ? { ...previous, refreshing: true, refreshError: undefined } : { s: "loading" });
       setSelected(null);
       requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" }));
       const res = await callApi<PlanResponse>("/api/plan", { method: "POST", body: JSON.stringify(p) });
@@ -131,7 +131,7 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
         setPlan({ s: "ok", data: res.data, prefs: p });
         const first = res.data.results.find((r) => r.score !== null) ?? res.data.results[0];
         setSelected(first ? `${first.slug}|${first.date}` : null);
-      } else setPlan({ s: "error", code: res.code });
+      } else setPlan(previous => previous.s === "ok" ? { ...previous, refreshing: false, refreshError: res.code } : { s: "error", code: res.code });
   };
 
   const onSubmit = (e: React.FormEvent) => {
@@ -380,13 +380,13 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
           <p id={`${formId}-priorities-hint`} className="small mt-3 text-ink-2" role="status">{prefs.priorities.length === 3 ? t.prioritiesLimit : t.prioritiesCount(prefs.priorities.length)}</p>
         </fieldset>
 
-        <button type="submit" className="btn w-full" disabled={plan.s === "loading"}>
-          {plan.s === "loading" ? <LoaderCircle aria-hidden size={19} className="animate-spin" /> : <Compass aria-hidden size={19} />}
-          {plan.s === "loading" ? t.submitting : t.submit}
+        <button type="submit" className="btn w-full" disabled={plan.s === "loading" || (plan.s === "ok" && !!plan.refreshing)}>
+          {plan.s === "loading" || (plan.s === "ok" && plan.refreshing) ? <LoaderCircle aria-hidden size={19} className="animate-spin" /> : <Compass aria-hidden size={19} />}
+          {plan.s === "loading" || (plan.s === "ok" && plan.refreshing) ? t.submitting : t.submit}
         </button>
       </form>
 
-      <div ref={resultsRef} data-state={plan.s} className="planner-results min-w-0 scroll-mt-28" aria-live="polite" aria-busy={plan.s === "loading"}>
+      <div ref={resultsRef} data-state={plan.s} className="planner-results min-w-0 scroll-mt-28" aria-live="polite" aria-busy={plan.s === "loading" || (plan.s === "ok" && !!plan.refreshing)}>
         <h2 className="planner-step sub"><span className="num" aria-hidden>02</span>{t.resultsTitle}</h2>
         {plan.s === "idle" && (
           <div className="mt-6">
@@ -414,8 +414,26 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
           </div>
         )}
         {plan.s === "error" && <ErrorState className="mt-6" code={plan.code} onRetry={() => submit(prefs)} />}
+        {plan.s === "ok" && plan.data.forecastFetchedAt && (
+          <div className="small mt-4 flex flex-wrap items-center justify-between gap-3 text-ink-2" aria-live="polite">
+            <p>{dict.common.updated} <time dateTime={plan.data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(plan.data.forecastFetchedAt))}</time></p>
+            {plan.refreshing && <p>{dict.detail.refreshing}</p>}
+          </div>
+        )}
+        {plan.s === "ok" && plan.refreshError && <div role="status" className="mt-3"><p className="small mb-2 text-ink-2">{dict.detail.refreshFailed}</p><ErrorState className="!bg-sand-2" code={plan.refreshError} onRetry={() => submit(prefs)} /></div>}
         {plan.s === "ok" && (
-          <Results data={plan.data} prefs={plan.prefs} selected={selected} onSelect={setSelected} />
+          <Results
+            data={plan.data}
+            prefs={plan.prefs}
+            currentPrefs={prefs}
+            selected={selected}
+            onSelect={setSelected}
+            onAdjustDrive={(maxDriveHours) => {
+              const next = { ...plan.prefs, maxDriveHours };
+              update("maxDriveHours", maxDriveHours);
+              void submit(next);
+            }}
+          />
         )}
       </div>
     </div>
@@ -450,19 +468,30 @@ function BestPick({ row, prefs }: { row: ScoreRow; prefs: PlanPrefs }) {
 function Results({
   data,
   prefs,
+  currentPrefs,
   selected,
   onSelect,
+  onAdjustDrive,
 }: {
   data: PlanResponse;
   prefs: PlanPrefs;
+  currentPrefs: PlanPrefs;
   selected: string | null;
   onSelect: (k: string) => void;
+  onAdjustDrive: (hours: number) => void;
 }) {
   const { locale, dict } = useI18n();
   const t = dict.plan;
+  const prefsMatch = JSON.stringify([prefs.city, prefs.experience, prefs.date, prefs.groupSize, prefs.maxDriveHours, prefs.tempPref, prefs.windTolerance, prefs.priorities]) ===
+    JSON.stringify([currentPrefs.city, currentPrefs.experience, currentPrefs.date, currentPrefs.groupSize, currentPrefs.maxDriveHours, currentPrefs.tempPref, currentPrefs.windTolerance, currentPrefs.priorities]);
 
   if (data.considered.length === 0) {
-    return <p className="lead mt-6 bg-sand-2 p-6">{t.noneInRange}</p>;
+    return (
+      <div className="mt-6 bg-sand-2 p-6">
+        <p className="lead">{t.noneInRange}</p>
+        {prefsMatch && prefs.maxDriveHours <= 1 && <p className="small mt-2 text-ink-2">{t.closerMinimum}</p>}
+      </div>
+    );
   }
 
   const nightsShown = prefs.date === "flexible" ? data.nights : [prefs.date];
@@ -480,6 +509,11 @@ function Results({
       {!data.airQuality.available && <p className="mt-2 bg-sand-2 p-3">{t.airDown}</p>}
       <CoverageNotice nights={incompleteForecastDates(data.forecasts, prefs)} />
       {top[0] && <BestPick row={top[0]} prefs={prefs} />}
+      {prefsMatch ? (
+        <CloserOption data={data} prefs={prefs} onConfirm={onAdjustDrive} />
+      ) : (
+        <p className="small mt-4 text-ink-2">{t.closerNeedsPlan}</p>
+      )}
 
       <h3 className="mt-10 mb-3 font-medium">{t.topPicks}</h3>
       <ol role="list" className="recommendation-list">
@@ -544,7 +578,9 @@ function Results({
             </p>
           )}
           <div className="mt-8">
-            <ExplainPanel key={`${sel.slug}|${sel.date}|${prefs.experience}|${locale}`} slug={sel.slug} date={sel.date} prefs={prefs} />
+            {prefsMatch
+              ? <ExplainPanel slug={sel.slug} date={sel.date} prefs={prefs} forecastKey={JSON.stringify([data.forecastFetchedAt, selMetrics])} />
+              : <p className="small text-ink-2">{t.explainNeedsPlan}</p>}
           </div>
           <Link
             href={`/destinations/${sel.slug}?night=${sel.date}&exp=${prefs.experience}`}
@@ -558,6 +594,66 @@ function Results({
 
       {prefs.date === "flexible" && <Matrix data={data} onSelect={onSelect} />}
     </div>
+  );
+}
+
+function CloserOption({
+  data,
+  prefs,
+  onConfirm,
+}: {
+  data: PlanResponse;
+  prefs: PlanPrefs;
+  onConfirm: (hours: number) => void;
+}) {
+  const { dict } = useI18n();
+  const t = dict.plan;
+  const [open, setOpen] = useState(false);
+  const proposedHours = Math.max(1, Math.round((prefs.maxDriveHours - 1) * 2) / 2);
+  const hasCloserDestinations = data.considered.some((slug) => {
+    const destination = getDestination(slug);
+    return destination && estimateDrive(destination).hours <= proposedHours;
+  });
+  const minimumReached = prefs.maxDriveHours <= 1;
+  const panelId = useId();
+
+  return (
+    <section className="mt-4">
+      <button
+        type="button"
+        className="btn-quiet disabled:opacity-50"
+        disabled={minimumReached}
+        aria-expanded={!minimumReached && open}
+        aria-controls={!minimumReached ? panelId : undefined}
+        onClick={() => setOpen((shown) => !shown)}
+      >
+        {t.closerAction}
+      </button>
+      {minimumReached && <p className="small mt-2 text-ink-2">{t.closerMinimum}</p>}
+      {!minimumReached && open && (
+        <div id={panelId} className="mt-3 border border-olive/20 bg-sand-2 p-4" aria-live="polite">
+          <p>{t.closerPrompt(prefs.maxDriveHours, proposedHours)}</p>
+          {!hasCloserDestinations && <p className="small mt-2 text-ink-2">{t.closerNone(proposedHours)}</p>}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {hasCloserDestinations && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setOpen(false);
+                  onConfirm(proposedHours);
+                }}
+              >
+                {t.closerConfirm}
+              </button>
+            )}
+            <button type="button" className="btn-quiet" onClick={() => setOpen(false)}>
+              {t.closerCancel}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
