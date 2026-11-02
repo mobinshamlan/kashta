@@ -27,7 +27,8 @@ export function loadForecast(slug: string): Snapshot | null {
     const snapshot: Snapshot = snapshots.get(slug) ?? JSON.parse(window.sessionStorage.getItem(keyFor(slug)) ?? "null");
     if (!snapshot || !Number.isFinite(snapshot.savedAt) || Date.now() - snapshot.savedAt > MAX_AGE_MS) return null;
     const { data } = snapshot;
-    if (data.slug !== slug || !Number.isFinite(Date.parse(data.fetchedAt)) || !planPrefsSchema.safeParse(snapshot.prefs).success) return null;
+    const fetchedAt = Date.parse(data.fetchedAt);
+    if (data.slug !== slug || !Number.isFinite(fetchedAt) || Date.now() - fetchedAt > MAX_AGE_MS || fetchedAt > Date.now() + 60_000 || !planPrefsSchema.safeParse(snapshot.prefs).success) return null;
     if (!Array.isArray(data.nights) || !Array.isArray(data.metrics) || data.nights.length !== data.metrics.length) return null;
     if (!data.metrics.every((metric, index) => metric.date === data.nights[index] && Array.isArray(metric.hours))) return null;
     const upcoming = new Set(upcomingNights());
