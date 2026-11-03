@@ -9,7 +9,7 @@ import { useI18n } from "./locale-provider";
  * screen readers and anyone who prefers numbers.
  */
 export function NightChart({ hours, dark = false }: { hours: HourPoint[]; dark?: boolean }) {
-  const { dict } = useI18n();
+  const { locale, dict } = useI18n();
   if (hours.length === 0) return null;
 
   const W = 640;
@@ -73,17 +73,17 @@ export function NightChart({ hours, dark = false }: { hours: HourPoint[]; dark?:
             </text>
           ) : null,
         )}
-        <text x={4} y={tempTop - 8} fontSize="12" fill={soft}>°C</text>
-        <text x={4} y={barTop - 4} fontSize="12" fill={soft}>km/h</text>
+        <text x={4} y={tempTop - 8} fontSize="12" fill={soft}>{locale === "ar" ? "°م" : "°C"}</text>
+        <text x={4} y={barTop - 4} fontSize="12" fill={soft}>{locale === "ar" ? "كم/س" : "km/h"}</text>
       </svg>
       <figcaption className={`small mt-2 flex flex-wrap gap-x-6 gap-y-1 ${dark ? "text-star-2" : "text-ink-2"}`}>
         <span className="inline-flex items-center gap-2">
           <span aria-hidden className="inline-block h-0.5 w-5" style={{ background: ink }} />
-          {dict.detail.tempLine} (°C)
+          {dict.detail.tempLine} ({locale === "ar" ? "°م" : "°C"})
         </span>
         <span className="inline-flex items-center gap-2">
           <span aria-hidden className="inline-block size-3" style={{ background: bar }} />
-          {dict.detail.gustBars} (km/h)
+          {dict.detail.gustBars} ({locale === "ar" ? "كم/س" : "km/h"})
         </span>
       </figcaption>
       <details className="small mt-3">
@@ -93,11 +93,11 @@ export function NightChart({ hours, dark = false }: { hours: HourPoint[]; dark?:
             <thead>
               <tr className={dark ? "text-star-2" : "text-ink-2"}>
                 <th className="py-1 text-start font-normal">⏱</th>
-                <th className="py-1 text-start font-normal">{dict.factor.temp} °C</th>
-                <th className="py-1 text-start font-normal">{dict.factor.wind} km/h</th>
+                <th className="py-1 text-start font-normal">{dict.factor.temp} {locale === "ar" ? "°م" : "°C"}</th>
+                <th className="py-1 text-start font-normal">{dict.factor.wind} {locale === "ar" ? "كم/س" : "km/h"}</th>
                 <th className="py-1 text-start font-normal">{dict.factor.rain} %</th>
                 <th className="py-1 text-start font-normal">{dict.factor.clouds} %</th>
-                <th className="py-1 text-start font-normal">{dict.factor.dust} μg/m³</th>
+                <th className="py-1 text-start font-normal">{dict.factor.dust} {locale === "ar" ? "ميكروغرام/م³" : "μg/m³"}</th>
               </tr>
             </thead>
             <tbody>

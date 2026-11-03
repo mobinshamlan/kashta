@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Minus, Plus } from "lucide-react";
 import { buildChecklist, type ChecklistGroup } from "@/lib/checklist";
 import { getDestination } from "@/lib/destinations";
+import { loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import type { Experience, NightMetrics } from "@/lib/types";
 import { useI18n } from "./locale-provider";
 
@@ -18,7 +19,7 @@ export function ChecklistPanel({
   date,
   nightLabel,
   experience,
-  groupSize,
+  groupSize: initialGroupSize,
   metrics,
   aiItems = [],
   dark = false,
@@ -33,6 +34,12 @@ export function ChecklistPanel({
   dark?: boolean;
 }) {
   const { locale, dict } = useI18n();
+  const [groupSize, setGroupSize] = useState(initialGroupSize);
+  const changeGroup = (n: number) => {
+    const next = Math.min(40, Math.max(1, n));
+    setGroupSize(next);
+    savePrefs({ ...loadPrefs(), groupSize: next });
+  };
   const items = useMemo(() => buildChecklist({ experience, groupSize, metrics, permitStatus: getDestination(slug)?.permit.status }), [experience, groupSize, metrics, slug]);
   const allIds = [...items.map((i) => i.id), ...aiItems.map((_, i) => `ai-${i}`)];
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -77,6 +84,32 @@ export function ChecklistPanel({
 
   return (
     <div>
+      <div className="mb-6 flex flex-wrap items-center gap-4">
+        <span id={`group-${slug}`} className="font-medium">{dict.detail.groupSize}</span>
+        <div className="flex items-stretch" role="group" aria-labelledby={`group-${slug}`}>
+          <button
+            type="button"
+            className="btn-quiet !px-3"
+            aria-label={locale === "ar" ? "أنقص شخص" : "One fewer person"}
+            disabled={groupSize <= 1}
+            onClick={() => changeGroup(groupSize - 1)}
+          >
+            <Minus aria-hidden size={18} />
+          </button>
+          <output className="num grid min-h-11 min-w-14 place-items-center px-3 text-lead" aria-live="polite">
+            {groupSize}
+          </output>
+          <button
+            type="button"
+            className="btn-quiet !px-3"
+            aria-label={locale === "ar" ? "زد شخص" : "One more person"}
+            disabled={groupSize >= 40}
+            onClick={() => changeGroup(groupSize + 1)}
+          >
+            <Plus aria-hidden size={18} />
+          </button>
+        </div>
+      </div>
       <div className="flex flex-wrap items-baseline justify-between gap-4">
         <p className={`max-w-[52ch] ${muted}`}>{dict.detail.checklistLead(groupSize, nightLabel)}</p>
         <div className="flex items-center gap-4">

@@ -7,15 +7,17 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: dict.destinations.title, description: dict.destinations.lead };
 }
 
-export default async function DestinationsPage() {
+export default async function DestinationsPage({ searchParams }: PageProps<"/destinations">) {
   const { dict } = await getDict();
+  const sp = await searchParams;
+  const mode = sp.mode === "stars" || sp.mode === "kashta" ? sp.mode : undefined;
   return (
-    <div className="frame pb-10 pt-10 md:pt-16">
-      <header className="mb-12 max-w-[52rem]">
-        <h1 className="display">{dict.destinations.title}</h1>
-        <p className="lead mt-6 max-w-[46ch]">{dict.destinations.lead}</p>
+    <div className="frame pb-12 pt-8 md:pt-12">
+      <header className="mb-8 max-w-[52rem]">
+        <h1 className="head">{dict.destinations.title}</h1>
+        <p className="mt-2 text-ink-2">{dict.home.scopeNote}</p>
       </header>
-      <DestinationIndex />
+      <DestinationIndex initialMode={mode} />
     </div>
   );
 }

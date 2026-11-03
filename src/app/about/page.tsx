@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import credits from "../../../public/photos/credits.json";
-import { NABATI_URL, NCVC_GUIDE_AR, NCVC_GUIDE_EN, NCVC_REQUIREMENTS_URL } from "@/lib/destinations";
+import { ExternalLink } from "lucide-react";
+import { NABATI_URL, NCVC_GUIDE_AR, NCVC_GUIDE_EN, NCVC_REQUIREMENTS_URL, RECOMMENDABLE } from "@/lib/destinations";
 import { getDict } from "@/lib/locale";
 import {
   BASE_WEIGHTS,
@@ -29,7 +30,71 @@ export default async function AboutPage() {
       <header className="max-w-[52rem]">
         <h1 className="display">{dict.about.title}</h1>
         <p className="lead mt-6 max-w-[46ch]">{dict.about.lead}</p>
+        <nav aria-label={ar ? "في هذي الصفحة" : "On this page"} className="mt-8">
+          <ul className="small flex flex-wrap gap-x-5 gap-y-1">
+            {[
+              ["#how", dict.home.stepsTitle],
+              ["#permit", dict.home.permitTitle],
+              ["#faq", dict.home.faqTitle],
+              ["#score-h", ar ? "المعادلة" : "The formula"],
+              ["#privacy", dict.footer.privacy],
+              ["#credits", dict.footer.credits],
+            ].map(([href, label]) => (
+              <li key={href}>
+                <a className="link inline-flex min-h-11 items-center" href={href}>{label}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </header>
+
+      <section id="how" aria-labelledby="how-h" className="mt-16 grid scroll-mt-8 gap-6 lg:grid-cols-12 lg:gap-10">
+        <h2 id="how-h" className={`${h2} lg:col-span-4`}>{dict.home.stepsTitle}</h2>
+        <div className="min-w-0 lg:col-span-8">
+          <p className="max-w-[62ch] text-ink-2">{dict.home.coverageLeadFn(RECOMMENDABLE.length)}</p>
+          <ol className="mt-6 grid max-w-[62ch] gap-5">
+            {dict.home.steps.map((step, i) => (
+              <li key={step.head} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
+                <span aria-hidden className="num grid size-8 place-items-center rounded-full border border-ink/30 text-sm">{i + 1}</span>
+                <span>
+                  <span className="block font-medium">{step.head}</span>
+                  <span className="text-ink-2">{step.body}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section id="permit" aria-labelledby="permit-h" className="mt-16 grid scroll-mt-8 gap-6 lg:grid-cols-12 lg:gap-10">
+        <h2 id="permit-h" className={`${h2} lg:col-span-4`}>{dict.home.permitTitle}</h2>
+        <div className="min-w-0 lg:col-span-8">
+          <p className="max-w-[62ch] text-ink-2">{dict.home.permitLead}</p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <a href={NABATI_URL} target="_blank" rel="noopener" className="btn">
+              {dict.permit.apply}
+              <ExternalLink aria-hidden size={16} />
+            </a>
+            <a href={ar ? NCVC_GUIDE_AR : NCVC_GUIDE_EN} target="_blank" rel="noopener" className="link inline-flex min-h-11 items-center gap-1.5">
+              {dict.home.guideLink}
+              <ExternalLink aria-hidden size={14} />
+            </a>
+          </div>
+          <p className="small mt-4 max-w-[62ch] text-ink-2">{dict.permit.disclaimer}</p>
+        </div>
+      </section>
+
+      <section id="faq" aria-labelledby="faq-h" className="mt-16 grid scroll-mt-8 gap-6 lg:grid-cols-12 lg:gap-10">
+        <h2 id="faq-h" className={`${h2} lg:col-span-4`}>{dict.home.faqTitle}</h2>
+        <div className="min-w-0 max-w-[65ch] border-t border-ink/15 lg:col-span-8">
+          {dict.home.faq.map((f) => (
+            <details key={f.q} className="faq-item">
+              <summary>{f.q}</summary>
+              <p className="pb-5 text-ink-2">{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
 
       <section aria-labelledby="score-h" className="mt-24 grid gap-10 lg:grid-cols-12">
         <h2 id="score-h" className={`${h2} lg:col-span-4`}>

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ForecastResponse } from "../src/lib/api-types";
-import { DESTINATIONS, estimateDrive } from "../src/lib/destinations";
+import { DESTINATIONS, estimateDrive, isRecommendable } from "../src/lib/destinations";
 import { rememberForecast } from "../src/lib/forecast-storage";
 import { computeNight, upcomingNights } from "../src/lib/nights";
 import { DEFAULT_PREFS } from "../src/lib/prefs-storage";
@@ -27,7 +27,7 @@ test("stars filters preserve the existing score and leave missing measurements u
   const prefs = { ...DEFAULT_PREFS, experience: "stars" as const, priorities: [] };
   for (const hours of [2, 3, 5]) {
     const ranked = rankStarForecasts(pool, prefs, hours);
-    assert.deepEqual(ranked.considered, DESTINATIONS.filter(site => site.experiences.includes("stars") && estimateDrive(site).hours <= hours).map(site => site.slug));
+    assert.deepEqual(ranked.considered, DESTINATIONS.filter(site => isRecommendable(site) && site.experiences.includes("stars") && estimateDrive(site).hours <= hours).map(site => site.slug));
     assert.ok(ranked.results.some(row => row.score !== null));
     assert.ok(ranked.results.filter(row => row.date === ranked.nights[6]).every(row => row.score === null && row.assessment === "incomplete"));
     for (const row of ranked.results) {

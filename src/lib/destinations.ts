@@ -33,8 +33,8 @@ const ncvcPermit: Permit = {
   sourceUrl: NCVC_GUIDE_AR,
   checkedOn: CHECKED_ON,
   notes: {
-    ar: "الموقع مدرج ضمن مواقع التخييم المعتمدة لدى المركز. التخييم فيه يحتاج تصريحًا يُطلب من منصة نباتي (خيار «طلب ترخيص تخييم»). بحسب أسئلة الدليل: مدة التخييم حتى ثلاثة أشهر، ولا يُحجز أكثر من موقع للتاريخ نفسه. الدليل صادر لموسم 2025، فتأكد من الموسم الحالي في المنصة قبل الطلعة.",
-    en: "Listed as an approved NCVC camping site. Camping here needs a permit requested on the Nabati platform (“Request Camping license”). Per the guide's FAQ: stays of up to three months, one location per date. The guide covers the 2025 season, so confirm the current season on the platform before you go.",
+    ar: "الموقع مدرج في دليل التخييم والكرفانات 2025 الصادر من المركز. التخييم فيه يحتاج تصريحًا يُطلب من منصة نباتي (خيار «طلب ترخيص تخييم»). بحسب أسئلة الدليل: مدة التخييم حتى ثلاثة أشهر، ولا يُحجز أكثر من موقع للتاريخ نفسه. الدليل صادر لموسم 2025، فتأكد من الموسم الحالي في المنصة قبل الطلعة.",
+    en: "Listed in the NCVC Camping and Caravan Guide 2025. Camping here needs a permit requested on the Nabati platform (“Request Camping license”). Per the guide's FAQ: stays of up to three months, one location per date. The guide covers the 2025 season, so confirm the current season on the platform before you go.",
   },
   applyUrl: NABATI_URL,
 };
@@ -74,8 +74,8 @@ function ncvcSite(row: NcvcRow): Destination {
     lon: row.lon,
     terrain: row.terrain,
     description: {
-      ar: `${row.kind.ar} في محافظة ${row.governorate.ar}، مدرج ضمن مواقع التخييم المعتمدة لدى المركز الوطني لتنمية الغطاء النباتي ومكافحة التصحر في منطقة الرياض.`,
-      en: `${row.kind.en} in ${row.governorate.en} governorate, listed among the NCVC's approved camping sites in the Riyadh region.`,
+      ar: `${row.kind.ar} في محافظة ${row.governorate.ar}، مدرج في دليل التخييم 2025 الصادر من المركز الوطني لتنمية الغطاء النباتي ومكافحة التصحر، ضمن مواقع منطقة الرياض.`,
+      en: `${row.kind.en} in ${row.governorate.en} governorate, listed in the NCVC Camping Guide 2025 for the Riyadh region.`,
     },
     facts: {
       ar: [
@@ -322,6 +322,13 @@ export const DESTINATIONS: Destination[] = [
 ];
 
 export const RIYADH = { lat: 24.7136, lon: 46.6753 };
+
+/** Only places whose camping status comes from an official source can be recommended. */
+export function isRecommendable(d: Destination): boolean {
+  return d.permit.status === "permit_required" || d.permit.status === "verified_permitted";
+}
+
+export const RECOMMENDABLE: Destination[] = DESTINATIONS.filter(isRecommendable);
 
 export function getDestination(slug: string): Destination | undefined {
   return DESTINATIONS.find((d) => d.slug === slug);

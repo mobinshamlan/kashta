@@ -1,5 +1,5 @@
 import { collectNumbers, extractJson, keepGrounded } from "@/lib/ai-guards";
-import { DESTINATIONS, estimateDrive, getDestination } from "@/lib/destinations";
+import { DESTINATIONS, estimateDrive, getDestination, isRecommendable } from "@/lib/destinations";
 import { apiError, fromException, privateJson, rateLimited, readJson } from "@/lib/http";
 import { chatLlama, llamaConfig } from "@/lib/llm";
 import { eligibleDestinations, scoreDestinations } from "@/lib/planner";
@@ -55,6 +55,7 @@ export async function POST(request: Request) {
 
     const alternatives = scores
       .filter((s) => s.score !== null && !(s.slug === slug && s.date === date))
+      .filter((s) => isRecommendable(getDestination(s.slug)!))
       .filter((s) => estimateDrive(getDestination(s.slug)!).hours <= prefs.maxDriveHours)
       .slice(0, 3);
 
