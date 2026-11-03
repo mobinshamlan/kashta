@@ -8,7 +8,34 @@ const SPECIFIC_DATE_OR_NIGHT = /(?:\b\d{4}-\d{2}-\d{2}\b|الليلة|اليوم
 const POSITIVE_MOON_VIEWING = /(?:(?:نبي|نبغى|أبي|ابغى|أبغى|ابي|ودي|أود)\s+)?(?:نشوف|نشاهد|نرى|أشوف|اشوف|أشاهد|اشاهد)\s+(?:القمر|قمر)|\b(?:see|watch|view)\s+(?:the\s+)?moon\b/iu;
 const EXPLICIT_DARK_SKY = /(?:ظلام|سماء\s+(?:مظلمة|داكنة)|بدون\s+(?:ضوء\s+)?القمر|ما\s+نبي\s+(?:ضوء\s+)?القمر|مانبي\s+(?:ضوء\s+)?القمر|moonless|no\s+moon(?:light)?|dark\s+sky|avoid\s+moonlight)/iu;
 const GROUP_SIZE_MENTION = /(?:(?:حنا|احنا|إحنا|نحن|معنا|عددنا)\s*(?:عدد)?\s*(?:[0-9٠-٩]+|واحد|واحدة|أحد|احد|اثنين|اثنتين|ثلاث|ثلاثة|أربع|أربعة|اربع|اربعة|خمس|خمسة|ست|ستة|سبع|سبعة|ثمان|ثمانية|تسع|تسعة|عشر|عشرة)|(?:[0-9٠-٩]+|واحد|واحدة|أحد|احد|اثنين|اثنتين|ثلاث|ثلاثة|أربع|أربعة|اربع|اربعة|خمس|خمسة|ست|ستة|سبع|سبعة|ثمان|ثمانية|تسع|تسعة|عشر|عشرة)\s*(?:أشخاص|اشخاص|شخص|نفر|people|of\s+us))/iu;
-const EXPERIENCE_MENTION = /(?:كشتة|نكشت|تخييم|مخيم|جلسة|رصد|نجوم|درب\s+التبانة|camp(?:ing)?|fire|stargaz|stars?)/iu;
+const KASHTA_MENTION = /(?:كشتة|كشته|نكشت|كشت|تخييم|نخيم|مخيم|جلسة|camp(?:ing)?|fire)/iu;
+const STARS_MENTION = /(?:رصد|نجوم|النجوم|درب\s+التبانة|stargaz|\bstars?\b)/iu;
+
+// Longest forms first so "تسعة" is not read as "تسع" + "ة", or "ستة" as "ست".
+const NUMBER_WORDS: [string, number][] = [
+  ["واحدة", 1], ["واحد", 1], ["اثنتين", 2], ["اثنين", 2], ["ثلاثة", 3], ["ثلاث", 3],
+  ["أربعة", 4], ["اربعة", 4], ["أربع", 4], ["اربع", 4], ["خمسة", 5], ["خمس", 5],
+  ["ستة", 6], ["ست", 6], ["سبعة", 7], ["سبع", 7], ["ثمانية", 8], ["ثمان", 8],
+  ["تسعة", 9], ["تسع", 9], ["عشرة", 10], ["عشر", 10],
+];
+const NUMBER_TOKEN = `(?:[0-9٠-٩]{1,2}|${NUMBER_WORDS.map(([w]) => w).join("|")})`;
+const GROUP_BEFORE = new RegExp(`(?:حنا|احنا|إحنا|نحن|معنا|عددنا)\\s*(?:عدد)?\\s*(${NUMBER_TOKEN})(?![\\p{L}])`, "u");
+const GROUP_AFTER = new RegExp(`(?<![\\p{L}])(${NUMBER_TOKEN})\\s*(?:أشخاص|اشخاص|شخص|نفر|people|persons|of\\s+us)`, "iu");
+
+function toNumber(token: string): number | null {
+  const digits = token.replace(/[٠-٩]/gu, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  if (/^\d+$/u.test(digits)) return Number(digits);
+  return NUMBER_WORDS.find(([w]) => w === token)?.[1] ?? null;
+}
+
+/** The headcount the user actually wrote, or null. Llama's number is never trusted over the text. */
+export function extractGroupSize(text: string): number | null {
+  const normalized = normalizeText(text);
+  const m = normalized.match(GROUP_BEFORE) ?? normalized.match(GROUP_AFTER);
+  if (!m) return null;
+  const n = toNumber(m[1]);
+  return n !== null && n >= 1 && n <= 40 ? n : null;
+}
 const TEMPERATURE_MENTION = /(?:حرارة|بارد|برد|معتدل|لطيف|دافئ|دافي|حار|حر|صقيع|جو\s+(?:بارد|معتدل|دافئ|دافي|حار)|temperature|cold|mild|warm|hot)/iu;
 const WIND_MENTION = /(?:هوا|هواء|رياح|عواصف|عاصفة|wind)/iu;
 const DRIVE_MENTION = /(?:قيادة|سواقة|سوق|ساعة|ساعات|بعيد|قريب|drive|hour|hours|far|near)/iu;
@@ -34,8 +61,16 @@ export function applyInterpretationGuards(
     next.date = null;
   }
 
-  if (!GROUP_SIZE_MENTION.test(normalizedText)) next.groupSize = null;
-  if (!EXPERIENCE_MENTION.test(normalizedText)) next.experience = null;
+  // Headcount and experience come from the user's words; Llama only fills what the text cannot settle.
+  const statedGroup = extractGroupSize(text);
+  if (statedGroup !== null) next.groupSize = statedGroup;
+  else if (!GROUP_SIZE_MENTION.test(normalizedText)) next.groupSize = null;
+
+  const saysKashta = KASHTA_MENTION.test(normalizedText);
+  const saysStars = STARS_MENTION.test(normalizedText);
+  if (saysKashta && !saysStars) next.experience = "kashta";
+  else if (saysStars && !saysKashta) next.experience = "stars";
+  else if (!saysKashta && !saysStars) next.experience = null;
   if (!TEMPERATURE_MENTION.test(normalizedText)) next.tempPref = null;
   if (!WIND_MENTION.test(normalizedText)) next.windTolerance = null;
   if (!DRIVE_MENTION.test(normalizedText)) next.maxDriveHours = null;

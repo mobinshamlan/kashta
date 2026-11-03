@@ -18,10 +18,9 @@ const STATUS: Record<ApiErrorCode, number> = {
 };
 
 export function apiError(code: ApiErrorCode, message: string, details?: unknown) {
-  return Response.json({ error: { code, message, details } }, {
-    status: STATUS[code],
-    headers: { "Cache-Control": "private, no-store" },
-  });
+  const headers: Record<string, string> = { "Cache-Control": "private, no-store" };
+  if (code === "too_many_requests") headers["Retry-After"] = "60";
+  return Response.json({ error: { code, message, details } }, { status: STATUS[code], headers });
 }
 
 /** Return request-specific API data without allowing a browser or shared cache to retain it. */
@@ -76,7 +75,11 @@ export async function readJson(request: Request): Promise<unknown> {
 const hits = new Map<string, number[]>();
 let lastRateLimitSweep = 0;
 export function rateLimited(request: Request, limit = 12, windowMs = 60_000): boolean {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  // On Vercel this header is set by the platform and cannot be spoofed by the client.
+  const ip =
+    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "local";
   const now = Date.now();
   if (now - lastRateLimitSweep >= windowMs) {
     for (const [key, timestamps] of hits) {

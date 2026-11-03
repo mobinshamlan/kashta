@@ -22,12 +22,16 @@ const factorListSchema = z.array(z.enum(FACTORS as [Factor, ...Factor[]])).max(3
   (factors) => new Set(factors).size === factors.length,
 );
 
+const asText = (v: unknown) => (typeof v === "number" ? String(v) : v);
+
 const sharePayloadSchema = z.object({
   destination: z.string().min(1).max(80).regex(/^[a-z0-9-]+$/),
   night: daySchema,
   experience: z.enum(["kashta", "stars"]),
-  groupSize: z.coerce.number().int().min(1).max(40),
-  maxDriveHours: z.coerce.number().min(0.5).max(6).refine((hours) => Number.isInteger(hours * 2)),
+  // Query values arrive as strings, the builder passes numbers; both must be plain decimals
+  // the planner's controls can show (1–40 people, 1–5 hours in half-hour steps).
+  groupSize: z.preprocess(asText, z.string().regex(/^\d{1,2}$/).transform(Number).pipe(z.number().int().min(1).max(40))),
+  maxDriveHours: z.preprocess(asText, z.string().regex(/^\d(?:\.5)?$/).transform(Number).pipe(z.number().min(1).max(5))),
   tempPref: z.enum(["cool", "mild", "warm"]),
   windTolerance: z.enum(["low", "medium", "high"]),
   priorities: factorListSchema,
