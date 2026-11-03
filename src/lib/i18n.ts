@@ -8,6 +8,32 @@ export function isLocale(v: unknown): v is Locale {
   return v === "ar" || v === "en";
 }
 
+/** Arabic counted nouns: 1 ساعة واحدة, 2 ساعتين, 3–10 ساعات, 11+ ساعة; fractions keep the singular. */
+export function arHours(h: number): string {
+  if (!Number.isInteger(h)) return `${h} ساعة`;
+  if (h === 1) return "ساعة واحدة";
+  if (h === 2) return "ساعتين";
+  if (h <= 10) return `${h} ساعات`;
+  return `${h} ساعة`;
+}
+
+export function arSites(n: number): string {
+  if (n === 1) return "موقع واحد";
+  if (n === 2) return "موقعين";
+  if (n <= 10) return `${n} مواقع`;
+  return `${n} موقعًا`;
+}
+
+/** "حوالي 3 ساعات" / "~3 h": a word instead of "~" keeps Arabic bidi order correct. */
+export function approxHours(h: number, locale: Locale): string {
+  return locale === "ar" ? `حوالي ${arHours(h)}` : `~${h} h`;
+}
+
+/** List separator that matches the language. */
+export function listJoin(items: string[], locale: Locale): string {
+  return items.join(locale === "ar" ? "، " : ", ");
+}
+
 export const pick = (l: Localized, locale: Locale) => l[locale];
 
 const ar = {
@@ -211,7 +237,7 @@ const ar = {
     flexible: "أي ليلة خلال أسبوع",
     groupLabel: "عدد الأشخاص",
     driveLabel: "أقصى مدة قيادة",
-    driveValue: (h: number) => `${h} ${h === 1 ? "ساعة" : "ساعات"}`,
+    driveValue: (h: number) => arHours(h),
     tempLabel: "الجو اللي تفضله",
     windLabel: "الرياح",
     prioritiesLabel: "أهم شي عندك (حتى 3)",
@@ -224,20 +250,21 @@ const ar = {
     availableComparison: "مقارنة متاحة، ببيانات ناقصة",
     summaryFactor: "أقوى عامل في التقييم:",
     summaryTradeoff: "خذ بالحسبان:",
-    summaryDrive: (hours: number) => `مدة القيادة تقديريًا ${hours} ساعة. افتح الخرائط للمسار الفعلي.`,
+    summaryDrive: (hours: number) => `مدة القيادة تقديريًا ${arHours(hours)}. افتح الخرائط للمسار الفعلي.`,
     closerAction: "أبي مكان أقرب",
-    closerPrompt: (from: number, to: number) => `نخفّض أقصى مدة القيادة من ${from} إلى ${to} ساعة، ثم نعيد ترتيب الليالي على تفضيلاتك الحالية. تبي نكمل؟`,
+    closerPrompt: (from: number, to: number) => `نخفّض أقصى مدة القيادة من ${arHours(from)} إلى ${arHours(to)}، ثم نعيد ترتيب الليالي على تفضيلاتك الحالية. تبي نكمل؟`,
     closerConfirm: "تأكيد وإعادة الترتيب",
     closerCancel: "إلغاء",
     closerMinimum: "أقصى مدة القيادة ساعة واحدة بالفعل، وما نقدر نقللها أكثر.",
-    closerNone: (hours: number) => `ما فيه وجهات مدرجة لهذه التجربة ضمن ${hours} ${hours === 1 ? "ساعة" : "ساعات"}؛ لذلك ما أعدنا البحث بنتائج فاضية.`,
+    closerNone: (hours: number) => `ما فيه وجهات مدرجة لهذه التجربة ضمن ${arHours(hours)}؛ لذلك ما أعدنا البحث بنتائج فاضية.`,
     closerNeedsPlan: "تغيّرت تفضيلاتك بعد هذه النتائج. رتّب الليالي من جديد قبل طلب مكان أقرب.",
     submit: "رتّب الليالي",
     submitting: "نحسب…",
     resultsTitle: "النتائج",
-    resultsLead: (n: number, nights: number) => `قارنّا ${n} موقع على ${nights} ${nights === 1 ? "ليلة" : "ليالي"}.`,
-    excluded: (n: number) => `استبعدنا ${n} مواقع أبعد من مدة القيادة اللي اخترتها.`,
+    resultsLead: (n: number, nights: number) => `قارنّا ${arSites(n)} على ${nights === 1 ? "ليلة واحدة" : nights === 2 ? "ليلتين" : `${nights} ليالٍ`}.`,
+    excluded: (n: number) => `استبعدنا ${arSites(n)} أبعد من مدة القيادة اللي اخترتها.`,
     noneInRange: "ما فيه مواقع ضمن مدة القيادة هذي. زد المدة شوي.",
+    widenDrive: (h: number) => `وسّع المدة إلى ${arHours(h)}`,
     emptyTitle: "ابدأ باختيار تفاصيل طلعتك",
     emptyBody: "بعد ما ترتّب الليالي، تظهر هنا الخيارات الأنسب وتفصيل كل عامل.",
     resultsMatchSettings: "هذه النتائج مبنية على إعداداتك الحالية.",
@@ -245,6 +272,8 @@ const ar = {
     resultsTimestampMissing: "وقت آخر تحديث غير متاح.",
     matrixTitle: "كل الليالي في نظرة",
     matrixCaption: "تقييم كل موقع لكل ليلة. الخانة الفارغة تعني بيانات ناقصة.",
+    matrixCapLegend: "† تقييم وصل للحد بسبب عامل خطر.",
+    matrixCapped: "وصل للحد بسبب عامل خطر",
     topPicks: "أفضل الخيارات",
     breakdown: "تفصيل التقييم",
     weight: "الوزن",
@@ -282,8 +311,8 @@ const ar = {
     sortLabel: "الترتيب",
     sortDistance: "الأقرب",
     sortName: "الاسم",
-    within: (h: number) => `خلال ${h} ساعات`,
-    count: (n: number) => `${n} موقع`,
+    within: (h: number) => `خلال ${arHours(h)}`,
+    count: (n: number) => arSites(n),
     empty: "ما فيه مواقع تطابق هذا الفلتر.",
   },
   detail: {
@@ -355,7 +384,8 @@ const ar = {
     rights: "كشتة",
     privacy: "الخصوصية",
     credits: "المصادر والصور",
-    weatherAttribution: "بيانات الطقس © Open-Meteo.com (CC BY 4.0)",
+    weatherAttribution: "بيانات الطقس",
+    weatherLicense: "© Open-Meteo.com (CC BY 4.0)",
   },
 };
 
@@ -549,6 +579,7 @@ const en: Dict = {
     resultsLead: (n: number, nights: number) => `We compared ${n} sites over ${nights} ${nights === 1 ? "night" : "nights"}.`,
     excluded: (n: number) => `${n} sites are beyond your drive limit.`,
     noneInRange: "No sites within that drive time. Allow a little longer.",
+    widenDrive: (h: number) => `Widen to ${h} ${h === 1 ? "hour" : "hours"}`,
     emptyTitle: "Start with your trip details",
     emptyBody: "After you rank the nights, suitable options and each factor will appear here.",
     resultsMatchSettings: "These results use your current settings.",
@@ -556,6 +587,8 @@ const en: Dict = {
     resultsTimestampMissing: "The last update time is unavailable.",
     matrixTitle: "Every night at a glance",
     matrixCaption: "Each site's score for each night. An empty cell means data is missing.",
+    matrixCapLegend: "† capped because a weather factor crossed its danger limit.",
+    matrixCapped: "capped by a dangerous condition",
     topPicks: "Top picks",
     breakdown: "Score breakdown",
     weight: "Weight",
@@ -664,7 +697,8 @@ const en: Dict = {
     rights: "KASHTA",
     privacy: "Privacy",
     credits: "Sources and photos",
-    weatherAttribution: "Weather data © Open-Meteo.com (CC BY 4.0)",
+    weatherAttribution: "Weather data",
+    weatherLicense: "© Open-Meteo.com (CC BY 4.0)",
   },
 };
 

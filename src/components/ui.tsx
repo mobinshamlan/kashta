@@ -104,7 +104,7 @@ export function FactorBars({
             <div className={`h-2 flex-1 ${track}`} aria-hidden>
               {f.score !== null && <div key={f.score} className={`factor-fill h-full ${fill}`} style={{ width: `${f.score}%` }} />}
             </div>
-            <span className="small num w-16 text-end">
+            <span className="small num min-w-16 whitespace-nowrap text-end">
               {f.score === null ? dict.plan.missing : `${f.score}/100`}
             </span>
           </div>

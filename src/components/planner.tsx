@@ -7,8 +7,8 @@ import { rememberPlanForecasts } from "@/lib/forecast-storage";
 import { incompleteForecastDates, recommendationHighlights } from "@/lib/recommendation-summary";
 import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
-import { getDestination, estimateDrive } from "@/lib/destinations";
-import { formatDayMonth, formatNight, formatWeekday } from "@/lib/i18n";
+import { DESTINATIONS, getDestination, estimateDrive } from "@/lib/destinations";
+import { formatDayMonth, formatNight, formatWeekday, approxHours } from "@/lib/i18n";
 import { DEFAULT_PREFS, loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import type { InterpretedPrefs } from "@/lib/schemas";
 import { rating } from "@/lib/score";
@@ -252,7 +252,7 @@ export function Planner({ initialText = "", initialExperience, initialShare }: {
                 {understood.unsupported?.includes("moon_viewing") && <p role="status" className="small mt-2 text-ink-2">{t.moonViewingUnsupported}</p>}
                 {!!understood.unclear?.length && (
                   <p className="small mt-2 text-ink-2">
-                    {t.unclear} {understood.unclear.join("، ")}
+                    {t.unclear} {understood.unclear.join(locale === "ar" ? "، " : ", ")}
                   </p>
                 )}
               </div>
@@ -469,7 +469,7 @@ export function Planner({ initialText = "", initialExperience, initialShare }: {
         {plan.s === "error" && <ErrorState className="mt-6" code={plan.code} onRetry={() => submit(prefs)} />}
         {plan.s === "ok" && (
           <div className="small mt-4 flex flex-wrap items-center justify-between gap-3 text-ink-2" aria-live="polite">
-            <p>{plan.data.forecastFetchedAt ? <>{dict.common.updated} <time dateTime={plan.data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(plan.data.forecastFetchedAt))}</time></> : t.resultsTimestampMissing}</p>
+            <p hidden={!plan.data.forecastFetchedAt && plan.data.considered.length === 0}>{plan.data.forecastFetchedAt ? <>{dict.common.updated} <time dateTime={plan.data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(plan.data.forecastFetchedAt))}</time></> : t.resultsTimestampMissing}</p>
             <p role="status">{resultSettingsMatch ? t.resultsMatchSettings : t.resultsUsePreviousSettings}</p>
             {plan.refreshing && <p>{dict.detail.refreshing}</p>}
           </div>
@@ -517,11 +517,11 @@ function BestPick({ row, prefs }: { row: ScoreRow; prefs: PlanPrefs }) {
         <div><h3 className="lead font-medium">{destination.name[locale]}</h3><p className="small mt-1 text-ink-2">{formatNight(row.date, locale)}</p></div>
         <ScoreFigure score={row.score} size="sm" />
       </div>
-      {row.score === null ? <p className="mt-4">{dict.plan.incompleteNote} {row.missing.map(factor => dict.factor[factor]).join("، ")}</p> : <>
+      {row.score === null ? <p className="mt-4">{dict.plan.incompleteNote} {row.missing.map(factor => dict.factor[factor]).join(locale === "ar" ? "، " : ", ")}</p> : <>
         {strongest && <p className="mt-4">{dict.plan.summaryFactor} {dict.factor[strongest.factor]}: <bdi className="num">{strongest.value}</bdi>.</p>}
         <p className="small mt-2 text-ink-2">{dict.plan.summaryTradeoff} {tradeoff ? <>{dict.factor[tradeoff.factor]}: <bdi className="num">{tradeoff.value}</bdi> ({tradeoff.score}/100).</> : dict.plan.summaryDrive(estimateDrive(destination).hours)}</p>
       </>}
-      {row.dealbreakers.length > 0 && <p className="small mt-3 text-poor">{dict.plan.dealbreaker}: {row.dealbreakers.map(factor => dict.factor[factor]).join("، ")}</p>}
+      {row.dealbreakers.length > 0 && <p className="small mt-3 text-poor">{dict.plan.dealbreaker}: {row.dealbreakers.map(factor => dict.factor[factor]).join(locale === "ar" ? "، " : ", ")}</p>}
       <Link href={`/destinations/${row.slug}?night=${row.date}&exp=${prefs.experience}`} className="link mt-4 inline-flex min-h-11 items-center font-medium">{dict.common.viewDestination}</Link>
     </section>
   );
@@ -546,17 +546,33 @@ function Results({
   const t = dict.plan;
   const prefsMatch = samePlanPrefs(prefs, currentPrefs);
 
+  // Smallest half-hour step (within the slider's 1–5 h) that reaches at least one site.
+  const reachable = DESTINATIONS.filter((d) => d.experiences.includes(prefs.experience)).map((d) => estimateDrive(d).hours);
+  const nearestRaw = reachable.length ? Math.ceil(Math.min(...reachable) * 2) / 2 : null;
+  const nearestHours = nearestRaw !== null && nearestRaw > prefs.maxDriveHours && nearestRaw <= 5 ? Math.max(1, nearestRaw) : null;
+
   if (data.considered.length === 0) {
     return (
-      <div className="mt-6 bg-sand-2 p-6">
+      <div className="mt-6 bg-sand-2 p-6" role="status">
         <p className="lead">{t.noneInRange}</p>
-        {prefsMatch && prefs.maxDriveHours <= 1 && <p className="small mt-2 text-ink-2">{t.closerMinimum}</p>}
+        {prefsMatch && nearestHours !== null && (
+          <button type="button" className="btn mt-5" onClick={() => onAdjustDrive(nearestHours)}>
+            {t.widenDrive(nearestHours)}
+          </button>
+        )}
       </div>
     );
   }
 
   const nightsShown = prefs.date === "flexible" ? data.nights : [prefs.date];
-  const top = data.results.slice(0, 6);
+  const top: ScoreRow[] = [];
+  const seenDestinations = new Set<string>();
+  for (const row of data.results) {
+    if (seenDestinations.has(row.slug)) continue;
+    top.push(row);
+    seenDestinations.add(row.slug);
+    if (top.length === 6) break;
+  }
   const sel = data.results.find((r) => `${r.slug}|${r.date}` === selected) ?? top[0];
   const selMetrics = sel ? data.metrics[`${sel.slug}|${sel.date}`] : undefined;
   const selDest = sel ? getDestination(sel.slug) : undefined;
@@ -595,9 +611,9 @@ function Results({
               >
                 <span className="num opacity-70">{i + 1}</span>
                 <span className="min-w-0">
-                  <span className="block truncate font-medium">{d.name[locale]}</span>
+                  <span className="block break-words font-medium">{d.name[locale]}</span>
                   <span className={`small block ${on ? "opacity-80" : "text-ink-2"}`}>
-                    {formatNight(r.date, locale, { short: true })} · ~{estimateDrive(d).hours} {dict.common.hours}
+                    {formatNight(r.date, locale, { short: true })} · {approxHours(estimateDrive(d).hours, locale)}
                   </span>
                 </span>
                 <span className="text-end">
@@ -625,7 +641,7 @@ function Results({
           </div>
           {sel.assessment === "incomplete" && (
             <p className="mt-4 bg-sand p-3">
-              {t.incompleteNote} {sel.missing.map((m) => dict.factor[m]).join("، ")}
+              {t.incompleteNote} {sel.missing.map((m) => dict.factor[m]).join(locale === "ar" ? "، " : ", ")}
             </p>
           )}
           {sel.dealbreakers.length > 0 && <p className="small mt-4 text-poor">{t.dealbreakerNote}</p>}
@@ -656,7 +672,7 @@ function Results({
         </section>
       )}
 
-      {prefs.date === "flexible" && <Matrix data={data} onSelect={onSelect} />}
+      {prefs.date === "flexible" && <Matrix data={data} selected={selected} onSelect={onSelect} />}
     </div>
   );
 }
@@ -673,6 +689,7 @@ function CloserOption({
   const { dict } = useI18n();
   const t = dict.plan;
   const [open, setOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const proposedHours = Math.max(1, Math.round((prefs.maxDriveHours - 1) * 2) / 2);
   const hasCloserDestinations = data.considered.some((slug) => {
     const destination = getDestination(slug);
@@ -684,6 +701,7 @@ function CloserOption({
   return (
     <section className="mt-4">
       <button
+        ref={toggleRef}
         type="button"
         className="btn-quiet disabled:opacity-50"
         disabled={minimumReached}
@@ -711,7 +729,14 @@ function CloserOption({
                 {t.closerConfirm}
               </button>
             )}
-            <button type="button" className="btn-quiet" onClick={() => setOpen(false)}>
+            <button
+              type="button"
+              className="btn-quiet"
+              onClick={() => {
+                setOpen(false);
+                requestAnimationFrame(() => toggleRef.current?.focus());
+              }}
+            >
               {t.closerCancel}
             </button>
           </div>
@@ -767,7 +792,7 @@ function SharePlanButton({ slug, night, prefs }: { slug: string; night: string; 
   );
 }
 
-function Matrix({ data, onSelect }: { data: PlanResponse; onSelect: (k: string) => void }) {
+function Matrix({ data, selected, onSelect }: { data: PlanResponse; selected: string | null; onSelect: (k: string) => void }) {
   const { locale, dict } = useI18n();
   const byKey = new Map(data.results.map((r) => [`${r.slug}|${r.date}`, r] as const));
   const sites = [...data.considered].sort((a, b) => {
@@ -787,6 +812,9 @@ function Matrix({ data, onSelect }: { data: PlanResponse; onSelect: (k: string) 
         {dict.plan.matrixTitle}
       </h3>
       <p className="small mt-1 text-ink-2">{dict.plan.matrixCaption}</p>
+      {data.results.some((r) => r.dealbreakers.length > 0) && (
+        <p className="small mt-1 text-ink-2">{dict.plan.matrixCapLegend}</p>
+      )}
       <div className="mt-4 overflow-x-auto">
         <table className="num w-full min-w-[40rem] border-separate border-spacing-1 text-center">
           <thead>
@@ -810,17 +838,21 @@ function Matrix({ data, onSelect }: { data: PlanResponse; onSelect: (k: string) 
                   {data.nights.map((n) => {
                     const r = byKey.get(`${s}|${n}`);
                     const c = cell(r);
+                    const key = `${s}|${n}`;
+                    const isSelected = key === selected;
+                    const capped = !!r?.dealbreakers.length;
                     return (
                       <td key={n} className="p-0">
                         <button
                           type="button"
-                          onClick={() => r && onSelect(`${s}|${n}`)}
+                          onClick={() => r && onSelect(key)}
                           disabled={!r}
-                          aria-label={`${d.name[locale]} ${formatNight(n, locale)}: ${r?.score ?? dict.rating.unknown}`}
-                          className="small h-10 w-full transition-opacity hover:opacity-80"
+                          aria-pressed={isSelected}
+                          aria-label={`${d.name[locale]} ${formatNight(n, locale)}: ${r?.score ?? dict.rating.unknown}${capped ? `, ${dict.plan.matrixCapped}` : ""}`}
+                          className="night-matrix-choice small h-10 w-full transition-opacity hover:opacity-80"
                           style={{ background: c.bg, color: c.fg }}
                         >
-                          {r?.score ?? "·"}
+                          {r?.score ?? "·"}{capped && <sup aria-hidden="true">†</sup>}
                         </button>
                       </td>
                     );

@@ -65,6 +65,8 @@ export async function POST(request: Request) {
 
     const guarded = applyInterpretationGuards(parsed.data.text, result.data);
     const prefs = guarded.prefs;
+    // The planner writes its own summary from the guarded settings; Llama's sentence may predate the guards.
+    prefs.summary = null;
     // A date must be one of the seven nights we can forecast; anything else is discarded.
     if (prefs.date && prefs.date !== "flexible" && !nights.includes(prefs.date)) prefs.date = null;
     if (prefs.priorities) prefs.priorities = [...new Set(prefs.priorities)];

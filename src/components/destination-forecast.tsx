@@ -164,7 +164,7 @@ export function DestinationForecast({
                 </span>
                 {s.dealbreakers.length > 0 ? (
                   <span className="small mt-1 font-medium" style={on ? undefined : { color: "var(--color-poor)" }}>
-                    {dict.plan.dealbreaker}: {s.dealbreakers.map((f) => dict.factor[f]).join("، ")}
+                    {dict.plan.dealbreaker}: {s.dealbreakers.map((f) => dict.factor[f]).join(locale === "ar" ? "، " : ", ")}
                   </span>
                 ) : (
                   <span className="small num mt-1 opacity-80" dir="ltr">
@@ -188,7 +188,7 @@ export function DestinationForecast({
           </div>
           {main.assessment === "incomplete" && (
             <p className="mt-4 bg-sand-2 p-3">
-              {dict.plan.incompleteNote} {main.missing.map((f) => dict.factor[f]).join("، ")}
+              {dict.plan.incompleteNote} {main.missing.map((f) => dict.factor[f]).join(locale === "ar" ? "، " : ", ")}
             </p>
           )}
           {main.dealbreakers.length > 0 && <p className="small mt-4 text-poor">{dict.plan.dealbreakerNote}</p>}
