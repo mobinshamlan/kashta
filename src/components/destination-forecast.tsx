@@ -12,14 +12,19 @@ import { ChecklistPanel } from "./checklist-panel";
 import { ExplainPanel } from "./explain-panel";
 import { useI18n } from "./locale-provider";
 import { NightChart } from "./night-chart";
+import { NightSkyTimeline } from "./night-sky-timeline";
 import { CoverageNotice, ErrorState, FactorBars, MoonGlyph, RATING_COLOR, ScoreFigure, Skeleton } from "./ui";
 
 export function DestinationForecast({
   slug,
+  lat,
+  lon,
   initialNight,
   initialExperience,
 }: {
   slug: string;
+  lat: number;
+  lon: number;
   initialNight?: string;
   initialExperience?: Experience;
 }) {
@@ -32,6 +37,7 @@ export function DestinationForecast({
   const [aiPacking, setAiPacking] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<ClientErrorCode | null>(null);
+  const [showNightSky, setShowNightSky] = useState(false);
   const nightStrip = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -237,6 +243,27 @@ export function DestinationForecast({
           </div>
         </section>
       </div>
+
+      <section aria-labelledby="night-sky-heading" className="mt-12 border-t border-ink/15 pt-7">
+        <h2 id="night-sky-heading" className="sr-only">{dict.detail.seeNight}</h2>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <button
+            type="button"
+            className="btn-quiet min-h-11"
+            aria-expanded={showNightSky}
+            aria-controls="night-sky-content"
+            onClick={() => setShowNightSky((open) => !open)}
+          >
+            {showNightSky ? dict.detail.hideNight : dict.detail.seeNight}
+          </button>
+          <p className="small text-ink-2">{nightLabel}</p>
+        </div>
+        {showNightSky && (
+          <div id="night-sky-content">
+            <NightSkyTimeline metrics={m} lat={lat} lon={lon} />
+          </div>
+        )}
+      </section>
 
       <section aria-labelledby="ai-heading" className="mt-16">
         <h2 id="ai-heading" className="sr-only">

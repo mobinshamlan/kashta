@@ -345,8 +345,6 @@
   .planner-form > fieldset, .planner-form > div:not(:first-child) { padding-top: 1.5rem; border-top: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent); }
   .planner-step { display: flex; align-items: center; gap: 0.8rem; }
   .planner-step > span:first-child { font-size: 0.85rem; color: var(--color-clay); }
-  .planner-empty-photo { border-radius: 8px 8px 42% 8px / 8px 8px 13% 8px; }
-  .planner-empty-caption { display: flex; align-items: center; gap: 0.65rem; border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 16%, transparent); padding-block: 1rem; }
   .planner-results { align-self: start; }
   .results-enter { animation: hero-arrive 500ms var(--ease-out-soft) both; }
   .recommendation-list { display: grid; gap: 0.5rem; }

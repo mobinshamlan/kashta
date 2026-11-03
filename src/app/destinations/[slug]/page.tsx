@@ -104,7 +104,7 @@ export default async function DestinationPage({ params, searchParams }: PageProp
             {dict.detail.forecast}
           </h2>
           <p className="mt-3 mb-8 text-ink-2">{dict.detail.forecastLead}</p>
-          <DestinationForecast slug={d.slug} initialNight={night} initialExperience={exp} />
+          <DestinationForecast slug={d.slug} lat={d.lat} lon={d.lon} initialNight={night} initialExperience={exp} />
         </section>
 
         <div className="grid gap-12 pb-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16">

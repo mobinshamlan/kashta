@@ -1,21 +1,19 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ArrowUpLeft, Compass, LoaderCircle, Minus, Plus, Wand2 } from "lucide-react";
-import { BrandMark } from "./brand-mark";
 import { rememberPlanForecasts } from "@/lib/forecast-storage";
 import { incompleteForecastDates, recommendationHighlights } from "@/lib/recommendation-summary";
 import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { getDestination, estimateDrive } from "@/lib/destinations";
 import { formatDayMonth, formatNight, formatWeekday } from "@/lib/i18n";
-import { PHOTOS } from "@/lib/photos";
 import { DEFAULT_PREFS, loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import type { InterpretedPrefs } from "@/lib/schemas";
 import { rating } from "@/lib/score";
 import { upcomingNights } from "@/lib/nights";
+import { buildPlanShareUrl, type SharedPlan } from "@/lib/share-link";
 import type { Factor, PlanPrefs } from "@/lib/types";
 import { ExplainPanel, useAiStatus } from "./explain-panel";
 import { useI18n } from "./locale-provider";
@@ -25,34 +23,43 @@ type Field = keyof Omit<PlanPrefs, "city">;
 
 const PRIORITY_OPTIONS: Factor[] = ["temp", "wind", "rain", "dust", "clouds", "moon"];
 
-export function Planner({ initialText = "", initialExperience }: { initialText?: string; initialExperience?: "kashta" | "stars" }) {
+function samePlanPrefs(a: PlanPrefs, b: PlanPrefs) {
+  return a.city === b.city &&
+    a.experience === b.experience &&
+    a.date === b.date &&
+    a.groupSize === b.groupSize &&
+    a.maxDriveHours === b.maxDriveHours &&
+    a.tempPref === b.tempPref &&
+    a.windTolerance === b.windTolerance &&
+    a.priorities.length === b.priorities.length &&
+    a.priorities.every((factor) => b.priorities.includes(factor));
+}
+
+export function Planner({ initialText = "", initialExperience, initialShare }: {
+  initialText?: string;
+  initialExperience?: "kashta" | "stars";
+  initialShare?: SharedPlan;
+}) {
   const { locale, dict } = useI18n();
   const t = dict.plan;
   const ai = useAiStatus();
   const nights = upcomingNights();
   const formId = useId();
 
-  const [prefs, setPrefs] = useState<PlanPrefs>(DEFAULT_PREFS);
+  const [prefs, setPrefs] = useState<PlanPrefs>(initialShare?.prefs ?? DEFAULT_PREFS);
   const [text, setText] = useState(initialText);
   const [applied, setApplied] = useState<Set<Field>>(new Set());
-  const [understood, setUnderstood] = useState<{ summary?: string | null; unclear?: string[] | null } | null>(null);
+  const [understood, setUnderstood] = useState<{ prefs: InterpretedPrefs; unclear?: string[] | null; unsupported?: string[] } | null>(null);
   const [interpret, setInterpret] = useState<{ s: "idle" | "loading" } | { s: "error"; code: ClientErrorCode }>({ s: "idle" });
-  const [groupInput, setGroupInput] = useState(String(DEFAULT_PREFS.groupSize));
+  const [groupInput, setGroupInput] = useState(String(initialShare?.prefs.groupSize ?? DEFAULT_PREFS.groupSize));
   const [groupError, setGroupError] = useState(false);
   const [plan, setPlan] = useState<
     { s: "idle" } | { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: PlanResponse; prefs: PlanPrefs; refreshing?: boolean; refreshError?: ClientErrorCode }
-  >({ s: "idle" });
+  >(initialShare ? { s: "loading" } : { s: "idle" });
   const [selected, setSelected] = useState<string | null>(null);
+  const [shareNotice, setShareNotice] = useState<{ night: string; nightOutsideCoverage: boolean; destinationUnavailable: boolean } | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Restore the last preferences used on this device.
-    const stored = loadPrefs();
-    const p = initialExperience ? { ...stored, experience: initialExperience } : stored;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPrefs(p);
-    setGroupInput(String(p.groupSize));
-  }, [initialExperience]);
+  const startedShareRef = useRef<string | null>(null);
 
   const update = <K extends Field>(key: K, value: PlanPrefs[K]) => {
     setPrefs((p) => {
@@ -74,7 +81,7 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
       return;
     }
     setInterpret({ s: "loading" });
-    const res = await callApi<{ prefs: InterpretedPrefs }>("/api/ai/interpret", {
+    const res = await callApi<{ prefs: InterpretedPrefs; unsupported?: string[] }>("/api/ai/interpret", {
       method: "POST",
       body: JSON.stringify({ text, locale }),
     });
@@ -117,11 +124,28 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
     savePrefs(next);
     setGroupInput(String(next.groupSize));
     setApplied(changed);
-    setUnderstood({ summary: got.summary, unclear: got.unclear });
+    setUnderstood({ prefs: got, unclear: got.unclear, unsupported: res.data.unsupported });
     setInterpret({ s: "idle" });
   };
 
-  const submit = async (p: PlanPrefs) => {
+  const interpretedSummary = (got: InterpretedPrefs) => {
+    const parts: string[] = [];
+    if (got.experience) parts.push(t.experienceLabel + ": " + dict.experience[got.experience]);
+    if (got.groupSize) parts.push(t.groupLabel + ": " + got.groupSize);
+    if (got.date) parts.push(t.dateLabel + ": " + (got.date === "flexible" ? t.flexible : formatNight(got.date, locale)));
+    if (got.maxDriveHours) {
+      const driveHours = Math.min(5, Math.max(1, Math.round(got.maxDriveHours * 2) / 2));
+      parts.push(t.driveLabel + ": " + t.driveValue(driveHours));
+    }
+    if (got.tempPref) parts.push(t.tempLabel + ": " + dict.temp[got.tempPref]);
+    if (got.windTolerance) parts.push(t.windLabel + ": " + dict.wind[got.windTolerance]);
+    if (got.priorities?.length) parts.push(t.prioritiesLabel + ": " + got.priorities.map((factor) => dict.factor[factor]).join(locale === "ar" ? "، " : ", "));
+    return parts.length
+      ? t.interpretedSettings + ": " + parts.join(locale === "ar" ? "، " : "; ")
+      : t.interpretedNone;
+  };
+
+  const submit = useCallback(async (p: PlanPrefs, share?: SharedPlan) => {
       setPlan(previous => previous.s === "ok" ? { ...previous, refreshing: true, refreshError: undefined } : { s: "loading" });
       setSelected(null);
       requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" }));
@@ -129,10 +153,46 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
       if (res.ok) {
         rememberPlanForecasts(res.data, p);
         setPlan({ s: "ok", data: res.data, prefs: p });
-        const first = res.data.results.find((r) => r.score !== null) ?? res.data.results[0];
-        setSelected(first ? `${first.slug}|${first.date}` : null);
+        if (share) {
+          const nightOutsideCoverage = !res.data.nights.includes(share.night);
+          const destinationRows = res.data.results.filter((row) => row.slug === share.slug);
+          const exactRow = nightOutsideCoverage ? undefined : destinationRows.find((row) => row.date === share.night);
+          const sameDestinationRow = destinationRows.find((row) => row.score !== null) ?? destinationRows[0];
+          const first = exactRow ?? sameDestinationRow ?? res.data.results.find((row) => row.score !== null) ?? res.data.results[0];
+          setSelected(first ? `${first.slug}|${first.date}` : null);
+          setShareNotice({ night: share.night, nightOutsideCoverage, destinationUnavailable: destinationRows.length === 0 });
+        } else {
+          const first = res.data.results.find((r) => r.score !== null) ?? res.data.results[0];
+          setSelected(first ? `${first.slug}|${first.date}` : null);
+          setShareNotice(null);
+        }
       } else setPlan(previous => previous.s === "ok" ? { ...previous, refreshing: false, refreshError: res.code } : { s: "error", code: res.code });
-  };
+  }, [setPlan, setSelected, setShareNotice]);
+
+  useEffect(() => {
+    const stored = loadPrefs();
+    if (initialShare) {
+      const key = JSON.stringify([initialShare.slug, initialShare.night, initialShare.prefs]);
+      const currentNights = upcomingNights();
+      const restoredPrefs = {
+        ...initialShare.prefs,
+        date: currentNights.includes(initialShare.night) ? initialShare.night : "flexible",
+      };
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPrefs(restoredPrefs);
+      setGroupInput(String(restoredPrefs.groupSize));
+      if (startedShareRef.current !== key) {
+        startedShareRef.current = key;
+        savePrefs(restoredPrefs);
+        void submit(restoredPrefs, initialShare);
+      }
+      return;
+    }
+
+    const restoredPrefs = initialExperience ? { ...stored, experience: initialExperience } : stored;
+    setPrefs(restoredPrefs);
+    setGroupInput(String(restoredPrefs.groupSize));
+  }, [initialExperience, initialShare, submit]);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,6 +209,7 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
     void submit(p);
   };
 
+  const resultSettingsMatch = plan.s === "ok" && samePlanPrefs(plan.prefs, prefs);
 
   const legend = "mb-3 font-medium";
 
@@ -187,7 +248,8 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
             {understood && (
               <div className="mt-4 bg-sand-2 p-4">
                 <p className="small font-medium">{t.understood}</p>
-                {understood.summary && <p className="mt-1">{understood.summary}</p>}
+                <p className="mt-1">{interpretedSummary(understood.prefs)}</p>
+                {understood.unsupported?.includes("moon_viewing") && <p role="status" className="small mt-2 text-ink-2">{t.moonViewingUnsupported}</p>}
                 {!!understood.unclear?.length && (
                   <p className="small mt-2 text-ink-2">
                     {t.unclear} {understood.unclear.join("، ")}
@@ -387,23 +449,14 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
       </form>
 
       <div ref={resultsRef} data-state={plan.s} className="planner-results min-w-0 scroll-mt-28" aria-live="polite" aria-busy={plan.s === "loading" || (plan.s === "ok" && !!plan.refreshing)}>
-        <h2 className="planner-step sub"><span className="num" aria-hidden>02</span>{t.resultsTitle}</h2>
         {plan.s === "idle" && (
-          <div className="mt-6">
-            <div className="planner-empty-photo relative aspect-[2/1] max-h-64 overflow-hidden">
-              <Image
-                src={PHOTOS["dahna-crest"].src}
-                alt={PHOTOS["dahna-crest"].alt[locale]}
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-cover"
-              />
-            </div>
-            <p className="planner-empty-caption small text-ink-2"><BrandMark className="h-7 w-8 shrink-0" />{PHOTOS["dahna-crest"].caption[locale]}</p>
-            <p className="lead mt-6">{t.emptyTitle}</p>
-            <p className="mt-2 max-w-[48ch] text-ink-2">{t.emptyBody}</p>
+          <div className="planner-empty-state mt-6 flex min-h-44 flex-col justify-center border-s-2 border-olive bg-sand-2 p-6 md:p-8" role="status">
+            <Compass aria-hidden size={24} className="text-olive" />
+            <p className="lead mt-3">{t.emptyTitle}</p>
+            <p className="mt-2 max-w-[40ch] text-ink-2">{t.emptyBody}</p>
           </div>
         )}
+        {plan.s !== "idle" && <h2 className="planner-step sub"><span className="num" aria-hidden>02</span>{t.resultsTitle}</h2>}
         {plan.s === "loading" && (
           <div className="mt-6 flex flex-col gap-3">
             <p className="small flex items-center gap-2 pb-3 text-olive"><LoaderCircle aria-hidden size={17} className="animate-spin" />{dict.common.loading}</p>
@@ -414,13 +467,22 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
           </div>
         )}
         {plan.s === "error" && <ErrorState className="mt-6" code={plan.code} onRetry={() => submit(prefs)} />}
-        {plan.s === "ok" && plan.data.forecastFetchedAt && (
+        {plan.s === "ok" && (
           <div className="small mt-4 flex flex-wrap items-center justify-between gap-3 text-ink-2" aria-live="polite">
-            <p>{dict.common.updated} <time dateTime={plan.data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(plan.data.forecastFetchedAt))}</time></p>
+            <p>{plan.data.forecastFetchedAt ? <>{dict.common.updated} <time dateTime={plan.data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(plan.data.forecastFetchedAt))}</time></> : t.resultsTimestampMissing}</p>
+            <p role="status">{resultSettingsMatch ? t.resultsMatchSettings : t.resultsUsePreviousSettings}</p>
             {plan.refreshing && <p>{dict.detail.refreshing}</p>}
           </div>
         )}
         {plan.s === "ok" && plan.refreshError && <div role="status" className="mt-3"><p className="small mb-2 text-ink-2">{dict.detail.refreshFailed}</p><ErrorState className="!bg-sand-2" code={plan.refreshError} onRetry={() => submit(prefs)} /></div>}
+        {plan.s === "ok" && shareNotice?.nightOutsideCoverage && (
+          <p role="status" className="small mt-3 border-s-2 border-clay bg-sand-2 p-3">
+            {t.shareNightOutsideCoverage(formatNight(shareNotice.night, locale))}
+          </p>
+        )}
+        {plan.s === "ok" && shareNotice?.destinationUnavailable && (
+          <p role="status" className="small mt-3 border-s-2 border-clay bg-sand-2 p-3">{t.shareDestinationUnavailable}</p>
+        )}
         {plan.s === "ok" && (
           <Results
             data={plan.data}
@@ -482,8 +544,7 @@ function Results({
 }) {
   const { locale, dict } = useI18n();
   const t = dict.plan;
-  const prefsMatch = JSON.stringify([prefs.city, prefs.experience, prefs.date, prefs.groupSize, prefs.maxDriveHours, prefs.tempPref, prefs.windTolerance, prefs.priorities]) ===
-    JSON.stringify([currentPrefs.city, currentPrefs.experience, currentPrefs.date, currentPrefs.groupSize, currentPrefs.maxDriveHours, currentPrefs.tempPref, currentPrefs.windTolerance, currentPrefs.priorities]);
+  const prefsMatch = samePlanPrefs(prefs, currentPrefs);
 
   if (data.considered.length === 0) {
     return (
@@ -582,13 +643,16 @@ function Results({
               ? <ExplainPanel slug={sel.slug} date={sel.date} prefs={prefs} forecastKey={JSON.stringify([data.forecastFetchedAt, selMetrics])} />
               : <p className="small text-ink-2">{t.explainNeedsPlan}</p>}
           </div>
-          <Link
-            href={`/destinations/${sel.slug}?night=${sel.date}&exp=${prefs.experience}`}
-            className="btn mt-8 inline-flex min-h-11 items-center font-medium"
-          >
-            {t.openChecklist}
-            <ArrowUpLeft aria-hidden size={18} className="direction-arrow" />
-          </Link>
+          <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Link
+              href={`/destinations/${sel.slug}?night=${sel.date}&exp=${prefs.experience}`}
+              className="btn inline-flex min-h-11 items-center font-medium"
+            >
+              {t.openChecklist}
+              <ArrowUpLeft aria-hidden size={18} className="direction-arrow" />
+            </Link>
+            <SharePlanButton slug={sel.slug} night={sel.date} prefs={prefs} />
+          </div>
         </section>
       )}
 
@@ -654,6 +718,52 @@ function CloserOption({
         </div>
       )}
     </section>
+  );
+}
+
+function SharePlanButton({ slug, night, prefs }: { slug: string; night: string; prefs: PlanPrefs }) {
+  const { dict } = useI18n();
+  const [status, setStatus] = useState<"idle" | "copied" | "manual" | "invalid">("idle");
+  const [url, setUrl] = useState("");
+
+  const copyLink = async () => {
+    const link = buildPlanShareUrl(window.location.origin, slug, night, prefs);
+    if (!link) {
+      setStatus("invalid");
+      return;
+    }
+    setUrl(link);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(link);
+      setStatus("copied");
+    } catch {
+      setStatus("manual");
+    }
+  };
+
+  return (
+    <>
+      <button type="button" className="btn-quiet min-h-11" onClick={copyLink}>
+        {dict.plan.shareLink}
+      </button>
+      {status === "copied" && <p role="status" className="small text-olive">{dict.plan.shareCopied}</p>}
+      {status === "manual" && (
+        <div className="w-full basis-full">
+          <p className="small mb-2 text-ink-2">{dict.plan.shareManual}</p>
+          <input
+            aria-label={dict.plan.shareManual}
+            className="field min-w-0 w-full text-start"
+            type="text"
+            dir="ltr"
+            readOnly
+            value={url}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        </div>
+      )}
+      {status === "invalid" && <p role="alert" className="small text-poor">{dict.plan.shareInvalid}</p>}
+    </>
   );
 }
 
