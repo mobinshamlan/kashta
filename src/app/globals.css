@@ -350,6 +350,23 @@
   .planner-step { display: flex; align-items: center; gap: 0.8rem; }
   .planner-step > span:first-child { font-size: 0.85rem; color: var(--color-clay); }
   .planner-results { align-self: start; }
+  .planner-empty-state {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(8rem, 14rem);
+    align-items: center;
+    gap: clamp(1rem, 3vw, 2.5rem);
+    animation: planner-empty-state-in 300ms ease-out both;
+  }
+  .planner-empty-state__copy { min-width: 0; }
+  .planner-empty-state__title { margin: 0; }
+  .planner-empty-state__art { display: block; width: 100%; max-width: 14rem; height: auto; justify-self: end; }
+  @keyframes planner-empty-state-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .planner-empty-state { animation: none; }
+  }
   .results-enter { animation: hero-arrive 500ms var(--ease-out-soft) both; }
   .recommendation-list { display: grid; gap: 0.5rem; }
   .recommendation-choice { border: 1px solid color-mix(in srgb, var(--color-ink) 17%, transparent); border-radius: 6px; transition: background-color 180ms ease, border-color 180ms ease; }
@@ -384,6 +401,7 @@
     .planner-results[data-state="ok"] { padding-inline-start: 1rem; }
   }
   @media (max-width: 639px) {
+    .planner-empty-state { grid-template-columns: minmax(0, 1fr) minmax(4.75rem, 6rem); gap: 1rem; }
     .hero-title { font-size: clamp(2.7rem, 11vw, 4.2rem); }
     .hero-actions { column-gap: 1.1rem; }
     .hero-actions > .btn { width: 100%; }

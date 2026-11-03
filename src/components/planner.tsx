@@ -450,10 +450,25 @@ export function Planner({ initialText = "", initialExperience, initialShare }: {
 
       <div ref={resultsRef} data-state={plan.s} className="planner-results min-w-0 scroll-mt-28" aria-live="polite" aria-busy={plan.s === "loading" || (plan.s === "ok" && !!plan.refreshing)}>
         {plan.s === "idle" && (
-          <div className="planner-empty-state mt-6 flex min-h-44 flex-col justify-center border-s-2 border-olive bg-sand-2 p-6 md:p-8" role="status">
-            <Compass aria-hidden size={24} className="text-olive" />
-            <p className="lead mt-3">{t.emptyTitle}</p>
-            <p className="mt-2 max-w-[40ch] text-ink-2">{t.emptyBody}</p>
+          <div className="planner-empty-state mt-6 min-h-44 border-s-2 border-olive bg-sand-2 p-6 md:p-8" role="status">
+            <div className="planner-empty-state__copy">
+              <p className="lead planner-empty-state__title">{t.emptyTitle}</p>
+              <p className="mt-2 max-w-[40ch] text-ink-2">{t.emptyBody}</p>
+            </div>
+            <svg className="planner-empty-state__art" viewBox="0 0 220 132" fill="none" aria-hidden="true" focusable="false">
+              <path d="M8 101c31-22 58-27 89-13 27 12 54 14 115-11v55H8z" fill="var(--color-sand-3)" opacity=".54" />
+              <path d="M9 104c31-22 58-26 88-13 31 14 64 12 114-10" stroke="var(--color-olive)" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M15 118c34-11 63-10 93 1 27 9 57 7 95-3" stroke="var(--color-clay)" strokeWidth="1.5" strokeLinecap="round" opacity=".76" />
+              <path d="M75 95 106 56l37 39H75Z" fill="var(--color-clay)" />
+              <path d="m106 56 37 39h-37z" fill="var(--color-clay-deep)" opacity=".28" />
+              <path d="M106 56v39" stroke="var(--color-sand)" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M106 95V76L91 95" fill="var(--color-sand-2)" />
+              <path d="M145 42v6m-3-3h6" stroke="var(--color-olive)" strokeWidth="1.4" strokeLinecap="round" />
+              <circle cx="192" cy="57" r="1.7" fill="var(--color-olive)" />
+              <circle cx="155" cy="63" r="1.3" fill="var(--color-clay)" opacity=".8" />
+              <circle cx="169" cy="29" r="12" fill="var(--color-clay)" />
+              <circle cx="176" cy="23" r="12" fill="var(--color-sand-2)" />
+            </svg>
           </div>
         )}
         {plan.s !== "idle" && <h2 className="planner-step sub"><span className="num" aria-hidden>02</span>{t.resultsTitle}</h2>}
