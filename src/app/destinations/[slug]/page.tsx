@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { approxHours } from "@/lib/i18n";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -62,7 +63,7 @@ export default async function DestinationPage({ params, searchParams }: PageProp
             <div>
               <dt className="small text-ink-2">{dict.common.driveEstimate}</dt>
               <dd className="num mt-1 lead">
-                ~{drive.hours} {dict.common.hours}
+                {approxHours(drive.hours, locale)}
                 <span className="small block text-ink-2">
                   {drive.straightKm} {dict.common.km} {dict.common.straightLine}
                 </span>
@@ -77,7 +78,7 @@ export default async function DestinationPage({ params, searchParams }: PageProp
             <div>
               <dt className="small text-ink-2">{dict.detail.capacity}</dt>
               <dd className="num mt-1">
-                {d.capacity.camping ?? "—"} / {d.capacity.caravans ?? "—"}
+                <bdi dir="ltr">{d.capacity.camping ?? "—"} / {d.capacity.caravans ?? "—"}</bdi>
                 <span className="small block text-ink-2">{locale === "ar" ? "مخيمات / كرفانات" : "camps / caravans"}</span>
               </dd>
             </div>

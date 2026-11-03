@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { approxHours, listJoin } from "@/lib/i18n";
 import Link from "next/link";
 import { ArrowDown, ArrowUpLeft, ExternalLink, MapPin, Moon, Wind } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
@@ -145,7 +146,7 @@ export default async function Home() {
               <dd className="font-medium">{dict.wind.low}</dd>
               <dt className="text-ink-2">{dict.plan.prioritiesLabel}</dt>
               <dd className="font-medium">
-                {dict.factor.dust}، {dict.factor.wind}، {dict.factor.clouds}
+                {listJoin([dict.factor.dust, dict.factor.wind, dict.factor.clouds], locale)}
               </dd>
             </dl>
             <p className="small mt-5 max-w-[44ch] text-ink-2">{t.describeNote}</p>
@@ -188,7 +189,7 @@ export default async function Home() {
                           <span>{d.name[locale]}</span>
                         </span>
                         <span className="small num shrink-0 text-ink-2">
-                          ~{estimateDrive(d).hours} {dict.common.hours}
+                          {approxHours(estimateDrive(d).hours, locale)}
                         </span>
                       </Link>
                     </li>

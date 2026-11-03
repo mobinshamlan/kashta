@@ -46,7 +46,7 @@ export default async function AboutPage() {
               : " before the weights are rebalanced. If a factor hits its danger limit (gusts beyond your tolerance, rain chance of 70% or more, or dust of 400 μg/m³ or more) the score is capped at 35. If any factor's data is missing, we give no number."}
           </p>
           <div className="mt-8 overflow-x-auto">
-            <table className="num w-full min-w-[36rem] text-start">
+            <table className="num w-full text-start md:min-w-[36rem]">
               <thead>
                 <tr className="text-ink-2">
                   <th className="py-2 pe-4 text-start font-normal">{ar ? "العامل" : "Factor"}</th>

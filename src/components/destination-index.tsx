@@ -1,5 +1,6 @@
 "use client";
 
+import { approxHours } from "@/lib/i18n";
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -95,7 +96,7 @@ export function DestinationIndex() {
             </span>
             <h2 className="head mt-4 group-hover:text-clay">{lead.name[locale]}</h2>
             <p className="mt-3 text-ink-2">
-              {lead.governorate[locale]} · ~{estimateDrive(lead).hours} {dict.common.hours} ({estimateDrive(lead).straightKm}{" "}
+              {lead.governorate[locale]} · {approxHours(estimateDrive(lead).hours, locale)} ({estimateDrive(lead).straightKm}{" "}
               {dict.common.km} {dict.common.straightLine})
             </p>
             <p className="mt-4 max-w-[44ch]">{lead.description[locale]}</p>
@@ -121,7 +122,7 @@ export function DestinationIndex() {
                 <div className="min-w-0">
                   <h2 className="lead font-medium group-hover:text-clay">{d.name[locale]}</h2>
                   <p className="small mt-1 text-ink-2">
-                    {d.governorate[locale]} · ~{drive.hours} {dict.common.hours}
+                    {d.governorate[locale]} · {approxHours(drive.hours, locale)}
                   </p>
                   <p className="small mt-1.5">
                     <span

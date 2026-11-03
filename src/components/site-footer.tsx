@@ -45,7 +45,7 @@ export function SiteFooter() {
         </div>
         <p className={`footer-meta small mt-6 pt-5 ${dark ? "text-star-2" : "text-ink-2"}`}>
           <a className="link" href="https://open-meteo.com/" rel="noopener" target="_blank">
-            {dict.footer.weatherAttribution}
+            {dict.footer.weatherAttribution}{" "}<bdi className="whitespace-nowrap" dir="ltr">{dict.footer.weatherLicense}</bdi>
           </a>
           <span className="mx-2" aria-hidden>
             ·

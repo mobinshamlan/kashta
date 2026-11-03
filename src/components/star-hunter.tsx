@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ForecastResponse, PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { estimateDrive, getDestination } from "@/lib/destinations";
-import { formatDayMonth, formatWeekday } from "@/lib/i18n";
+import { formatDayMonth, formatWeekday, approxHours } from "@/lib/i18n";
 import { DEFAULT_PREFS, loadPrefs } from "@/lib/prefs-storage";
 import { rememberPlanForecasts } from "@/lib/forecast-storage";
 import { loadStarForecasts, rankStarForecasts } from "@/lib/star-forecasts";
@@ -143,7 +143,7 @@ export function StarHunter() {
                     <FactorBars factors={best.factors} dealbreakers={best.dealbreakers} dark />
                     <div>
                       <p className="text-star-2">
-                        {dict.stars.drive}: ~{estimateDrive(d).hours} {dict.common.hours} ({estimateDrive(d).straightKm} {dict.common.km}{" "}
+                        {dict.stars.drive}: {approxHours(estimateDrive(d).hours, locale)} ({estimateDrive(d).straightKm} {dict.common.km}{" "}
                         {dict.common.straightLine})
                       </p>
                       <p className="small mt-3 text-star-2">{dict.stars.noLight}</p>
