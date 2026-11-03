@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Planner } from "@/components/planner";
 import { getDict } from "@/lib/locale";
+import { parsePlanShareParams } from "@/lib/share-link";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { dict } = await getDict();
@@ -10,8 +11,11 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
   const { locale, dict } = await getDict();
   const sp = await searchParams;
-  const q = typeof sp.q === "string" ? sp.q.slice(0, 600) : "";
-  const exp = sp.exp === "stars" || sp.exp === "kashta" ? sp.exp : undefined;
+  const share = parsePlanShareParams(sp);
+  const q = share.kind === "valid" ? "" : typeof sp.q === "string" ? sp.q.slice(0, 600) : "";
+  const exp = share.kind === "valid"
+    ? share.value.prefs.experience
+    : sp.exp === "stars" || sp.exp === "kashta" ? sp.exp : undefined;
 
   return (
     <div className="frame pb-10 pt-7 md:pt-9">
@@ -23,7 +27,8 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
           <span><b>2</b>{dict.plan.resultsTitle}</span>
         </div>
       </header>
-      <Planner initialText={q} initialExperience={exp} />
+      {share.kind === "invalid" && <p role="alert" className="mb-6 border-s-2 border-clay bg-sand-2 p-4">{dict.plan.invalidShare}</p>}
+      <Planner initialText={q} initialExperience={exp} initialShare={share.kind === "valid" ? share.value : undefined} />
     </div>
   );
 }

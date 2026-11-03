@@ -1,4 +1,4 @@
-import { apiError, fromException, readJson } from "@/lib/http";
+import { apiError, fromException, privateJson, readJson } from "@/lib/http";
 import { buildPlan } from "@/lib/planner";
 import { planPrefsSchema } from "@/lib/schemas";
 import { upcomingNights } from "@/lib/nights";
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     return apiError("invalid_input", "The date must be one of the next seven nights");
   }
   try {
-    return Response.json(await buildPlan(prefs));
+    return privateJson(await buildPlan(prefs));
   } catch (err) {
     return fromException(err);
   }

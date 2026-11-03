@@ -1,6 +1,6 @@
 import { collectNumbers, extractJson, keepGrounded } from "@/lib/ai-guards";
 import { DESTINATIONS, estimateDrive, getDestination } from "@/lib/destinations";
-import { apiError, fromException, rateLimited, readJson } from "@/lib/http";
+import { apiError, fromException, privateJson, rateLimited, readJson } from "@/lib/http";
 import { chatLlama, llamaConfig } from "@/lib/llm";
 import { eligibleDestinations, scoreDestinations } from "@/lib/planner";
 import { explainRequestSchema, explanationSchema } from "@/lib/schemas";
@@ -124,7 +124,7 @@ Reply with ONE JSON object and nothing else:
       dropped += 1;
     }
 
-    return Response.json({
+    return privateJson({
       explanation: {
         summary: summaryOk ? out.summary : null,
         reasons: guard(out.reasons),
