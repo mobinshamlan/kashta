@@ -9,6 +9,8 @@ import { loadForecast, rememberForecast } from "@/lib/forecast-storage";
 import { rating, scoreNight } from "@/lib/score";
 import type { Experience, PlanPrefs } from "@/lib/types";
 import { ChecklistPanel } from "./checklist-panel";
+import { ReasonList } from "./recommendation-card";
+import { nightReasons } from "@/lib/reasons";
 import { ExplainPanel } from "./explain-panel";
 import { useI18n } from "./locale-provider";
 import { NightChart } from "./night-chart";
@@ -168,7 +170,7 @@ export function DestinationForecast({
                   </span>
                 ) : (
                   <span className="small num mt-1 opacity-80" dir="ltr">
-                    {mm.minTemp ?? "—"}° · {mm.maxGust ?? "—"} km/h
+                    {mm.minTemp ?? "—"}° · {mm.maxGust ?? "—"} {locale === "ar" ? "كم/س" : "km/h"}
                   </span>
                 )}
               </label>
@@ -192,6 +194,12 @@ export function DestinationForecast({
             </p>
           )}
           {main.dealbreakers.length > 0 && <p className="small mt-4 text-poor">{dict.plan.dealbreakerNote}</p>}
+          {nightReasons(main, main.metrics).length > 0 && (
+            <div className="mt-6" style={{ ["--accent" as string]: "var(--color-clay)" }}>
+              <p className="small mb-3 text-ink-2">{dict.reasons.title}</p>
+              <ReasonList reasons={nightReasons(main, main.metrics)} />
+            </div>
+          )}
           <div className="mt-8">
             <FactorBars factors={main.factors} dealbreakers={main.dealbreakers} />
           </div>

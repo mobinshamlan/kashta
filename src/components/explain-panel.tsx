@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { MessageCircleQuestion } from "lucide-react";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { getDestination } from "@/lib/destinations";
 import { formatNight } from "@/lib/i18n";
@@ -100,10 +100,9 @@ function ExplainPanelContent({
           disabled={ai !== true || state.s === "loading"}
           aria-describedby={ai === false ? `ai-off-${slug}` : undefined}
         >
-          <Sparkles aria-hidden size={18} />
+          <MessageCircleQuestion aria-hidden size={18} />
           {state.s === "loading" ? dict.plan.explaining : dict.plan.explain}
         </button>
-        <span className={`text-xs ${muted}`}>{locale === "ar" ? "بمساعدة Llama" : "With Llama"}</span>
       </div>
       {ai === false && (
         <p id={`ai-off-${slug}`} className={`small mt-3 max-w-[56ch] ${muted}`}>

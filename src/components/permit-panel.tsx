@@ -26,12 +26,12 @@ export function PermitPanel({ permit, dict, locale }: { permit: Permit; dict: Di
   }).format(new Date(`${permit.checkedOn}T12:00:00Z`));
 
   return (
-    <section aria-labelledby="permit-heading" className="bg-olive p-6 text-olive-ink md:p-10">
+    <section id="permit" aria-labelledby="permit-heading" className="rounded-[14px] bg-olive p-6 text-olive-ink md:p-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 id="permit-heading" className="sub">
           {dict.permit.title}
         </h2>
-        <PermitBadge status={permit.status} label={dict.permit.status[permit.status]} />
+        <PermitBadge status={permit.status} label={dict.permit.short[permit.status]} />
       </div>
       <p className="mt-5 max-w-[60ch]">{permit.notes[locale]}</p>
       <dl className="small mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-[auto_1fr]">

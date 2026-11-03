@@ -11,7 +11,7 @@ import { BrandMark } from "./brand-mark";
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
     <span className={`brand-wordmark ${className}`}>
-      <BrandMark className="brand-emblem text-clay" />
+      <BrandMark className="brand-emblem text-[var(--brand-mark,var(--color-clay))]" />
       <span className="brand-lettering">
         <span lang="ar" className="brand-arabic">كشتة</span>
         <span lang="en" dir="ltr" className="brand-latin">KASHTA</span>
@@ -35,9 +35,10 @@ export function LanguageSwitch({ className = "" }: { className?: string }) {
         document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
         startTransition(() => router.refresh());
       }}
-      className={`min-h-11 px-3 font-medium transition-colors hover:text-clay ${className}`}
+      className={`lang-chip ${className}`}
     >
-      {dict.nav.switchTo}
+      {/* One letter is enough to signal the other language; the accessible name says it in full. */}
+      <span aria-hidden>{locale === "ar" ? "E" : "ع"}</span>
     </button>
   );
 }
@@ -47,7 +48,7 @@ export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const panelId = useId();
-  const dark = pathname.startsWith("/stars");
+  const dark = pathname === "/";
 
   useEffect(() => {
     if (!open) return;
@@ -57,16 +58,16 @@ export function SiteHeader() {
   }, [open]);
 
   const links = [
-    { href: "/plan", label: dict.nav.plan },
+    { href: "/", label: dict.nav.nights },
     { href: "/destinations", label: dict.nav.destinations },
-    { href: "/stars", label: dict.nav.stars },
+    { href: "/#plan", label: dict.nav.plan },
     { href: "/about", label: dict.nav.method },
   ];
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
 
   return (
-    <header className={`site-header sticky top-0 z-40 ${dark ? "on-dark bg-night text-star" : "bg-sand text-ink"}`}>
+    <header className={`site-header sticky top-0 z-40 ${dark ? "on-dark bg-sky text-star" : "bg-sand text-ink"}`}>
       <div className="frame flex h-16 items-center justify-between gap-6 lg:h-[4.5rem]">
         <Link href="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label="KASHTA كشتة">
           <Wordmark />
@@ -90,38 +91,34 @@ export function SiteHeader() {
           </ul>
         </nav>
 
-        <div className="hidden items-center gap-2 lg:flex">
-          <LanguageSwitch />
-          <Link href="/plan" className="btn">
-            {dict.common.planCta}
-          </Link>
-        </div>
-
-        <button
-          type="button"
-          className="inline-flex min-h-11 min-w-11 items-center justify-center lg:hidden"
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center lg:hidden"
           aria-expanded={open}
           aria-controls={panelId}
           onClick={() => setOpen((v) => !v)}
         >
           {open ? <X aria-hidden size={24} /> : <Menu aria-hidden size={24} />}
           <span className="sr-only">{open ? dict.nav.close : dict.nav.menu}</span>
-        </button>
+          </button>
+          <LanguageSwitch />
+        </div>
       </div>
 
       <div
         id={panelId}
         hidden={!open}
-        className={`absolute inset-x-0 top-full lg:hidden ${dark ? "bg-night" : "bg-sand"}`}
+        className={`absolute inset-x-0 top-full lg:hidden ${dark ? "bg-sky" : "bg-sand"}`}
       >
         <nav aria-label={dict.nav.menu} className="frame pb-8 pt-2">
           <ul className="flex flex-col">
-            {[{ href: "/", label: dict.nav.home }, ...links].map((l) => (
+            {links.map((l) => (
               <li key={l.href}>
                 <Link
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  aria-current={isActive(l.href) && l.href !== "/" ? "page" : undefined}
+                  aria-current={isActive(l.href) ? "page" : undefined}
                   className="flex min-h-14 items-center lead font-light"
                 >
                   {l.label}
@@ -129,12 +126,6 @@ export function SiteHeader() {
               </li>
             ))}
           </ul>
-          <div className="mt-6 flex items-center justify-between gap-4">
-            <Link href="/plan" onClick={() => setOpen(false)} className="btn flex-1">
-              {dict.common.planCta}
-            </Link>
-            <LanguageSwitch />
-          </div>
         </nav>
       </div>
     </header>

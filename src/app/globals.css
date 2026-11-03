@@ -16,9 +16,18 @@
   --color-night-3: #2c3038;
   --color-star: #e8e7e4;
   --color-star-2: #b9b3a7;
-  --color-good: #3f6b3a;
-  --color-fair: #8a6a1f;
+  --color-good: #355d31;
+  --color-fair: #6b5317;
   --color-poor: #8f2f1f;
+
+  /* The night: hero, recommendation card and stargazing surfaces. */
+  --color-sky: #0e1424;
+  --color-sky-2: #172038;
+  --color-sky-3: #24304d;
+  --color-dune-night: #1d1a24;
+  /* Mode accents, both 7:1+ on --color-sky. */
+  --color-ember: #e8894a;
+  --color-starlight: #a9c4e8;
 
   --font-sans: var(--font-plex), "IBM Plex Sans Arabic", system-ui, sans-serif;
 
@@ -61,6 +70,9 @@
   .on-dark :focus-visible,
   .on-dark:focus-visible {
     outline-color: var(--color-star);
+  }
+  .on-night :focus-visible {
+    outline-color: var(--accent, var(--color-star));
   }
   a,
   button,
@@ -264,6 +276,10 @@
 @keyframes shimmer {
   to { transform: translateX(100%); }
 }
+:dir(rtl) .skeleton::after { animation-name: shimmer-rtl; transform: translateX(100%); }
+@keyframes shimmer-rtl {
+  to { transform: translateX(-100%); }
+}
 
 /* Entrance: content is visible without script; with script, parts rise in once. */
 .js [data-reveal] {
@@ -294,7 +310,6 @@
     transform: scale(1);
   }
 }
-
 @layer components {
   .site-header {
     border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
@@ -339,12 +354,9 @@
   .direction-arrow { transition: transform 200ms ease; }
   :dir(ltr) .direction-arrow { transform: rotate(90deg); }
   .btn:hover .direction-arrow { translate: -2px -2px; }
+  :dir(ltr) .btn:hover .direction-arrow { translate: 2px -2px; }
   .brand-divider { border-block: 1px solid rgb(255 255 255 / 12%); }
   [id] { scroll-margin-top: 6rem; }
-  .plan-masthead { border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 20%, transparent); }
-  .journey-steps { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 2rem; }
-  .journey-steps span { display: inline-flex; align-items: center; gap: 0.6rem; }
-  .journey-steps b { display: grid; place-items: center; width: 1.65rem; height: 1.65rem; border: 1px solid currentColor; border-radius: 50%; font-size: 0.8rem; font-weight: 500; }
   .planner-form { padding: clamp(1.25rem, 2.4vw, 2rem); background: color-mix(in srgb, var(--color-sand) 65%, white); border: 1px solid color-mix(in srgb, var(--color-ink) 13%, transparent); border-radius: 8px; }
   .planner-form > fieldset, .planner-form > div:not(:first-child) { padding-top: 1.5rem; border-top: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent); }
   .planner-step { display: flex; align-items: center; gap: 0.8rem; }
@@ -385,7 +397,7 @@
   .destination-card img { transition: transform 650ms var(--ease-out-soft); }
   .destination-card:hover img { transform: scale(1.045); }
   .destination-card:focus-visible { outline-offset: 5px; }
-  .destination-lead-image { border-radius: 7px 7px 60px 7px; }
+  .destination-lead-image { border-radius: 7px; border-end-end-radius: 60px; }
   .destination-hero { height: clamp(20rem, 58svh, 45rem); }
   .destination-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(transparent 65%, rgb(20 25 18 / 45%)); }
   .destination-intro { border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 17%, transparent); margin-bottom: 3.5rem; }
@@ -411,7 +423,6 @@
     .destination-facts { gap: 1.25rem; }
   }
 }
-
 @keyframes hero-arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes score-draw { from { stroke-dashoffset: 251.33; } }
 @keyframes factor-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -441,4 +452,480 @@
   .home-hero > :not(figure), .results-enter { animation: none; }
   .btn:hover, .destination-card:hover img { transform: none; }
   .btn:hover .direction-arrow { translate: none; }
+}
+
+/* ——— Night system: hero, card, seven nights, Sadu band, map ——— */
+@layer components {
+  [data-mode="kashta"] { --accent: var(--color-ember); }
+  [data-mode="stars"] { --accent: var(--color-starlight); }
+
+  .on-night { background: var(--color-sky); color: var(--color-star); }
+  .on-night .muted { color: var(--color-star-2); }
+
+  .night-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--color-sky) 0%, #141c33 55%, #222a44 100%);
+  }
+  .night-scene { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
+  .night-scene .twinkle { animation: twinkle 5s ease-in-out infinite; }
+  .night-scene .twinkle:nth-of-type(3n) { animation-delay: -1.7s; animation-duration: 6.5s; }
+  .night-scene .twinkle:nth-of-type(4n) { animation-delay: -3.1s; }
+  .night-scene .fire { transform-box: fill-box; transform-origin: 50% 100%; animation: flicker 2.6s ease-in-out infinite; }
+  :dir(ltr) .night-scene { transform: scaleX(-1); }
+  /* Two moods, one scene: kashta keeps the fire bright; stargazing lets the sky take over. */
+  @keyframes twinkle { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.35; } }
+  @keyframes flicker { 0%, 100% { transform: scaleY(1); } 40% { transform: scaleY(0.9) scaleX(1.04); } 70% { transform: scaleY(1.06); } }
+
+  .hero-grid {
+    display: grid;
+    gap: 2rem;
+    padding-block: clamp(2rem, 5vw, 4.5rem) clamp(5rem, 9vw, 8rem);
+  }
+  @media (min-width: 1024px) {
+    .hero-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 30rem); align-items: start; gap: 4rem; }
+  }
+  .hero-h1 {
+    font-family: var(--font-ruqaa), var(--font-sans);
+    font-size: clamp(2.6rem, 1.6rem + 4.2vw, 5.4rem);
+    line-height: 1.45;
+    white-space: pre-line;
+    text-wrap: balance;
+  }
+  :lang(en) .hero-h1 { font-family: var(--font-sans); font-weight: 500; line-height: 1.08; letter-spacing: -0.025em; }
+  .hero-lead { max-width: 40ch; font-size: var(--text-lead); line-height: 1.7; color: var(--color-star-2); }
+  :lang(en) .hero-lead { line-height: 1.45; }
+
+  /* Mode switch: two real radio inputs, styled as one control. */
+  .mode-switch { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; padding: 0.35rem; border-radius: 999px; background: rgb(255 255 255 / 7%); border: 1px solid rgb(255 255 255 / 14%); }
+  .mode-option { position: relative; display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; gap: 0.55rem; padding: 0.5rem 1.4rem; border-radius: 999px; font-weight: 500; color: var(--color-star); transition: background-color 180ms ease, color 180ms ease; }
+  .mode-option:hover { background: rgb(255 255 255 / 8%); }
+  .mode-option input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .mode-option:has(input:checked) { background: var(--opt-accent); color: var(--color-sky); }
+  .mode-option:has(input:focus-visible) { outline: 3px solid var(--color-star); outline-offset: 3px; }
+  .mode-option[data-opt="kashta"] { --opt-accent: var(--color-ember); }
+  .mode-option[data-opt="stars"] { --opt-accent: var(--color-starlight); }
+  .mode-switch.on-sand { background: var(--color-sand-2); border-color: color-mix(in srgb, var(--color-ink) 14%, transparent); }
+  .mode-switch.on-sand .mode-option { color: var(--color-ink); }
+  .mode-switch.on-sand .mode-option:hover { background: var(--color-sand-3); }
+  .mode-switch.on-sand .mode-option:has(input:checked) { background: var(--color-sky); color: var(--opt-accent); }
+  .mode-switch.on-sand .mode-option:has(input:focus-visible) { outline-color: var(--color-clay); }
+
+  /* The recommendation: always a piece of night sky, on any page. */
+  .rec-card {
+    position: relative;
+    border-radius: 18px;
+    padding: clamp(1.25rem, 2.6vw, 1.9rem);
+    background: color-mix(in srgb, var(--color-sky-2) 94%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent, var(--color-star)) 38%, transparent);
+    color: var(--color-star);
+    box-shadow: 0 30px 60px -30px rgb(0 0 0 / 60%);
+    backdrop-filter: blur(6px);
+  }
+  .rec-kicker { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--accent, var(--color-star)); font-weight: 500; }
+  .rec-place { font-size: clamp(1.6rem, 1.2rem + 1.5vw, 2.25rem); font-weight: 500; line-height: 1.25; }
+  .rec-reasons { display: grid; gap: 0.7rem; }
+  .rec-reasons li { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); gap: 0.6rem; align-items: start; }
+  .rec-reasons svg { margin-top: 0.2rem; color: var(--accent, var(--color-star)); }
+  .rec-reasons li[data-tone="caution"] svg { color: #f2b8a4; }
+  :not(.on-night) > .rec-reasons li[data-tone="caution"] svg, .on-sand .rec-reasons li[data-tone="caution"] svg { color: var(--color-poor); }
+  .rec-reasons .muted { color: var(--color-ink-2); }
+  .on-night .rec-reasons .muted { color: var(--color-star-2); }
+  .on-dark .site-header, .site-header.on-dark { --brand-mark: var(--color-ember); }
+  .rec-divider { border-top: 1px solid rgb(255 255 255 / 12%); }
+  .btn-accent { background: var(--accent, var(--color-ember)); color: var(--color-sky); }
+  .btn-accent:hover { background: color-mix(in srgb, var(--accent, var(--color-ember)) 82%, white); }
+  .btn-ghost-night { display: inline-flex; min-height: 3rem; align-items: center; gap: 0.5rem; padding: 0.7rem 1.2rem; border-radius: 4px; border: 1px solid rgb(255 255 255 / 28%); font-weight: 500; transition: background-color 180ms ease; }
+  .btn-ghost-night:hover { background: rgb(255 255 255 / 8%); }
+  .rec-link { text-decoration: underline; text-underline-offset: 0.25em; text-decoration-thickness: 1px; }
+  .rec-link:hover { color: var(--accent, var(--color-star)); }
+
+  /* Seven nights: one column per night, bar height is the night's best score. */
+  .seven { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: clamp(0.25rem, 1vw, 0.75rem); }
+  .seven-night {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto 6.5rem auto auto;
+    justify-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.2rem 0.7rem;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    color: var(--color-star);
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+  .seven-night:hover { background: rgb(255 255 255 / 6%); }
+  .seven-night[aria-pressed="true"] { background: rgb(255 255 255 / 9%); border-color: var(--accent); }
+  .seven-bar-track { position: relative; width: clamp(0.6rem, 2vw, 1rem); height: 100%; border-radius: 999px; background: rgb(255 255 255 / 9%); overflow: hidden; }
+  .seven-bar { position: absolute; inset-inline: 0; bottom: 0; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, var(--color-sky-3)); transition: height 500ms var(--ease-out-soft); }
+  .seven-night[data-best="true"] .seven-bar { background: var(--accent); }
+  .seven-best-tag { position: absolute; top: -0.65rem; inset-inline: 0; margin-inline: auto; width: max-content; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--accent); color: var(--color-sky); font-size: 0.72rem; font-weight: 600; }
+  .seven-day { font-size: 0.8rem; line-height: 1.25; text-align: center; white-space: nowrap; }
+  .seven-score { font-variant-numeric: tabular-nums; font-size: 1rem; font-weight: 500; }
+  .seven-ground { background: var(--color-dune-night); }
+  :lang(en) .seven-day { font-size: 0.78rem; }
+
+  /* Sadu-inspired band: stepped, woven-looking triangles in wool tones, used once at the horizon. */
+  .sadu-band { display: block; width: 100%; height: 14px; }
+
+  .coverage-map { width: 100%; height: auto; max-height: 34rem; }
+  .coverage-map .ring { fill: none; stroke: color-mix(in srgb, var(--color-ink) 28%, transparent); stroke-dasharray: 3 5; }
+  .coverage-map .ring-label { fill: var(--color-ink-2); font-size: 18px; paint-order: stroke; stroke: var(--color-sand-2); stroke-width: 5px; stroke-linejoin: round; }
+  .coverage-map .site { fill: var(--color-clay); stroke: var(--color-sand); stroke-width: 2; }
+  .coverage-map .site-unverified { fill: var(--color-sand); stroke: var(--color-ink-2); stroke-width: 2; }
+  .coverage-map a:hover .site, .coverage-map a:focus-visible .site { fill: var(--color-ink); }
+  .coverage-map a:focus-visible { outline: none; }
+  .coverage-map a:focus-visible circle { stroke: var(--color-ink); stroke-width: 6; }
+  .coverage-map .site-num { fill: var(--color-sand); font-size: 10px; font-weight: 600; pointer-events: none; }
+  .coverage-map .site-unverified + .site-num { fill: var(--color-ink); }
+
+  .faq-item { border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 15%, transparent); }
+  .faq-item summary { display: flex; min-height: 3.25rem; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 0.75rem; font-weight: 500; list-style: none; }
+  .faq-item summary::-webkit-details-marker { display: none; }
+  .faq-item summary::after { content: "+"; font-size: 1.4rem; font-weight: 300; line-height: 1; }
+  .faq-item[open] summary::after { content: "−"; }
+
+  .adjust-panel { border-radius: 14px; background: color-mix(in srgb, var(--color-sand) 65%, white); border: 1px solid color-mix(in srgb, var(--color-ink) 13%, transparent); }
+  .place-row { border-radius: 12px; border: 1px solid color-mix(in srgb, var(--color-ink) 15%, transparent); transition: background-color 160ms ease, border-color 160ms ease; }
+  .place-row:hover { background: var(--color-sand-2); }
+  .place-row[aria-pressed="true"] { border-color: var(--color-ink); background: var(--color-sand-2); box-shadow: inset 3px 0 0 var(--color-ink); }
+  :dir(rtl) .place-row[aria-pressed="true"] { box-shadow: inset -3px 0 0 var(--color-ink); }
+  .photo-chip { background: rgb(20 25 18 / 80%); color: var(--color-sand); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .night-scene .twinkle, .night-scene .fire { animation: none; }
+  .seven-bar { transition: none; }
+}
+
+/* ——— Revision: mode composition, planning band, place options ——— */
+@layer components {
+  /* Kashta brings the camp forward; stargazing pushes it back so the sky leads. */
+
+  .plan-band { background: color-mix(in srgb, var(--color-sand) 70%, white); border-top: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent); }
+  .plan-steps { display: flex; flex-wrap: wrap; gap: 0.5rem; counter-reset: step; }
+  .plan-steps li { display: grid; gap: 0.1rem; min-width: 8.5rem; padding: 0.6rem 0.9rem; border-radius: 12px; background: var(--color-sand-2); counter-increment: step; }
+  .plan-step-k { font-size: var(--text-small); color: var(--color-ink-2); }
+  .plan-step-k::before { content: counter(step) ". "; font-variant-numeric: tabular-nums; }
+  .plan-step-v { font-weight: 500; }
+
+  .place-option {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    min-height: 4.5rem;
+    padding: 0.85rem 1rem;
+    padding-inline-start: 2.6rem;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--color-ink) 15%, transparent);
+    background: var(--color-sand);
+    cursor: pointer;
+    transition: border-color 160ms ease, background-color 160ms ease;
+  }
+  .place-option:hover { background: var(--color-sand-2); }
+  .place-option input { position: absolute; inset-inline-start: 1rem; top: 50%; translate: 0 -50%; width: 1.1rem; height: 1.1rem; margin: 0; accent-color: var(--color-ink); }
+  .place-option:has(input:checked) { border-color: var(--color-ink); background: var(--color-sand-2); box-shadow: inset 0 0 0 1px var(--color-ink); }
+  .place-option:has(input:focus-visible) { outline: 3px solid var(--color-clay); outline-offset: 2px; }
+  .plan-go { background: var(--color-sky); color: var(--accent, var(--color-ember)); }
+  .plan-go:hover { background: var(--color-sky-3); }
+}
+@media (prefers-reduced-motion: reduce) {
+}
+
+/* ——— Revision 4: scenes by mode, stepper, activity tiles, plan entry ——— */
+@layer components {
+
+  .stepper { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .stepper li { display: flex; }
+  .stepper-btn { display: inline-flex; align-items: center; gap: 0.55rem; min-height: 2.9rem; max-width: 13rem; padding: 0.35rem 0.85rem 0.35rem 0.6rem; border-radius: 999px; background: var(--color-sand-2); color: var(--color-ink-2); text-align: start; font-size: var(--text-small); line-height: 1.25; }
+  :dir(rtl) .stepper-btn { padding: 0.35rem 0.6rem 0.35rem 0.85rem; }
+  .stepper-btn:not(:disabled):hover { background: var(--color-sand-3); color: var(--color-ink); }
+  .stepper-btn:disabled { cursor: default; }
+  .stepper-n { display: grid; place-items: center; flex-shrink: 0; width: 1.6rem; height: 1.6rem; border-radius: 999px; border: 1.5px solid currentColor; font-size: 0.8rem; font-weight: 600; }
+  .stepper li[data-done] .stepper-btn { color: var(--color-ink); }
+  .stepper li[data-done] .stepper-n { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-sand); }
+  .stepper li[aria-current="step"] .stepper-btn { background: var(--color-sky); color: var(--color-star); font-weight: 500; }
+  .stepper li[aria-current="step"] .stepper-n { border-color: var(--accent, var(--color-ember)); color: var(--accent, var(--color-ember)); }
+  .stepper-v { color: var(--color-ink-2); font-weight: 400; }
+
+  .mode-tile { position: relative; display: grid; overflow: hidden; border-radius: 18px; background: var(--color-sky); color: var(--color-star); cursor: pointer; isolation: isolate; outline: 2px solid transparent; transition: outline-color 160ms ease, transform 200ms var(--ease-out-soft); }
+  .mode-tile input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 2; }
+  .mode-tile-art { position: relative; display: block; aspect-ratio: 16 / 8; overflow: hidden; background: linear-gradient(180deg, #0e1424, #1d2240); }
+  .mode-tile[data-mode="kashta"] .mode-tile-art { background: linear-gradient(180deg, #0e1424 0%, #2c2230 100%); }
+  .mode-tile[data-mode="stars"] .mode-tile-art { background: linear-gradient(180deg, #070b17 0%, #1a2140 100%); }
+  .mode-tile-art .night-scene { z-index: 0; }
+  .mode-tile-text { display: grid; gap: 0.3rem; padding: 1rem 1.15rem 1.15rem; }
+  .mode-tile:has(input:checked) { outline: 3px solid var(--accent); }
+  .mode-tile[data-mode="kashta"] { --accent: var(--color-ember); }
+  .mode-tile[data-mode="stars"] { --accent: var(--color-starlight); }
+  .mode-tile:has(input:focus-visible) { outline: 3px solid var(--color-clay); outline-offset: 3px; }
+  .mode-tile:hover { transform: translateY(-2px); }
+
+  .plan-entry { background: color-mix(in srgb, var(--color-sand) 70%, white); }
+  .plan-entry-steps { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; counter-reset: pstep; }
+  .plan-entry-steps li { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--color-ink-2); counter-increment: pstep; }
+  .plan-entry-steps li::before { content: counter(pstep); display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 999px; background: var(--color-sand-2); color: var(--color-ink); font-size: 0.8rem; font-weight: 600; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mode-tile { transition: none; }
+  .mode-tile:hover { transform: none; }
+}
+
+@layer components {
+  /* Phones: leave a strip of the scene visible under the card. */
+  @media (max-width: 1023px) {
+    .hero-grid { padding-bottom: 12.5rem; }
+  }
+  /* The switch sits over the scene: give it its own night backdrop. */
+  .night-hero .mode-switch { background: rgb(14 20 36 / 72%); backdrop-filter: blur(6px); }
+  /* Phones: one row of steps; only the current step keeps its label. */
+  @media (max-width: 639px) {
+    .stepper { flex-wrap: nowrap; }
+    .stepper li:not([aria-current]) .stepper-btn > span:last-child { display: none; }
+    .stepper li:not([aria-current]) .stepper-btn { padding-inline: 0.55rem; }
+  }
+}
+
+/* ——— Revision 5: compact hero (copy · card · week), rating label, compact week ——— */
+@layer components {
+  .home-hero-v2 { background: #0b1020; }
+  .hero-grid-v2 {
+    position: relative;
+    display: grid;
+    gap: 1.5rem;
+    padding-block: clamp(1.5rem, 3.5vw, 3rem) clamp(2rem, 4vw, 3rem);
+    grid-template-areas: "copy" "card" "week";
+  }
+  @media (min-width: 1024px) {
+    .hero-grid-v2 {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 27rem);
+      /* The week sits under the card so the middle of the scene (the camp, the sky) stays visible. */
+      grid-template-areas: "copy card" "copy week";
+      column-gap: clamp(2.5rem, 5vw, 5rem);
+      row-gap: 2rem;
+      align-items: start;
+    }
+  }
+  .hero-copy-v2 { grid-area: copy; }
+  .hero-card-v2 { grid-area: card; }
+  .hero-week-v2 {
+    grid-area: week;
+    padding: 1rem 1.1rem 0.9rem;
+    border-radius: 16px;
+    background: rgb(11 16 32 / 72%);
+    border: 1px solid rgb(255 255 255 / 9%);
+    backdrop-filter: blur(6px);
+  }
+  .home-hero-v2 .hero-h1 { font-size: clamp(2.2rem, 1.4rem + 3vw, 4.1rem); line-height: 1.4; }
+  :lang(en) .home-hero-v2 .hero-h1 { line-height: 1.1; }
+  .hero-sub { max-width: 46ch; color: var(--color-star-2); font-size: var(--text-body); }
+
+  .rec-rating {
+    flex-shrink: 0;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--rating) 30%, var(--color-sky-2));
+    border: 1px solid color-mix(in srgb, var(--rating) 70%, white);
+    color: var(--color-star);
+    font-size: var(--text-small);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .seven--compact .seven-night { grid-template-rows: auto 4.5rem auto; gap: 0.35rem; padding-block: 1rem 0.5rem; }
+  .seven--compact .seven-best-tag { top: -0.6rem; }
+  .seven--compact { padding-top: 0.4rem; }
+}
+
+@layer components {
+  /* The assistant entry: one calm line until opened. */
+  .helper { max-width: 44rem; }
+  .helper-toggle {
+    display: inline-flex; align-items: center; gap: 0.55rem; min-height: 2.9rem;
+    padding: 0.5rem 1rem; border-radius: 999px;
+    border: 1.5px solid color-mix(in srgb, var(--color-ink) 35%, transparent);
+    color: var(--color-ink); font-weight: 500;
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+  .helper-toggle svg:first-child { color: var(--color-clay); }
+  .helper-toggle:hover { background: var(--color-sand-2); border-color: var(--color-ink); }
+
+  /* Plain-language suitability on light surfaces. */
+  .rating-pill {
+    flex-shrink: 0; align-self: start;
+    padding: 0.25rem 0.7rem; border-radius: 999px;
+    background: color-mix(in srgb, var(--rating) 14%, var(--color-sand));
+    border: 1px solid color-mix(in srgb, var(--rating) 55%, transparent);
+    color: var(--rating); font-size: var(--text-small); font-weight: 600; white-space: nowrap;
+  }
+}
+
+@layer components {
+  .seven-weekday { display: block; }
+  /* Narrow phones: weekday names don't fit seven columns; the date number does. */
+  @media (max-width: 440px) {
+    /* Keep the row so bars line up with "tonight", but hide names that don't fit. */
+    .seven--compact li:not(:first-child) .seven-weekday { visibility: hidden; height: 1.25em; overflow: hidden; }
+    .seven--compact .seven-day { font-size: 0.82rem; }
+  }
+}
+
+/* ——— Revision 6: one scene with a camera, compact home, language chip ——— */
+@layer components {
+  /* Kashta is a close shot of the camp; stargazing pulls the same camera back to the whole sky. */
+  .night-scene .ns-camera {
+    transform-box: view-box;
+    transform-origin: 640px 712px;
+    transition: transform 800ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .night-scene[data-scene="kashta"] .ns-camera { transform: scale(2.3); }
+  .night-scene .ns-deep, .night-scene .ns-warm, .night-scene .ns-fireglow { transition: opacity 700ms ease; }
+  .night-scene[data-scene="kashta"] .ns-deep { opacity: 0.14; }
+  .night-scene[data-scene="stars"] .ns-warm { opacity: 0; }
+  .night-scene[data-scene="stars"] .ns-fireglow { opacity: 0.3; }
+
+  .home-v3 { background: #0b1020; }
+  .home-v3-grid { padding-block: clamp(1.25rem, 3vw, 2.5rem); }
+  .home-v3-main { max-width: 30rem; }
+  .home-v3-title { font-family: var(--font-ruqaa), var(--font-sans); font-size: clamp(1.85rem, 1.35rem + 1.7vw, 2.75rem); line-height: 1.5; white-space: pre-line; text-wrap: balance; }
+  :lang(en) .home-v3-title { font-family: var(--font-sans); font-weight: 500; line-height: 1.15; letter-spacing: -0.015em; }
+  .home-v3-window { height: 14rem; }
+  @media (min-width: 1024px) {
+    .home-v3-grid { min-height: 34rem; }
+    .home-v3-window { display: none; }
+  }
+  .home-v3-week { background: #17151f; }
+  .week-legend { display: grid; gap: 0.35rem; }
+  .week-legend li { display: flex; align-items: center; gap: 0.6rem; }
+  .week-legend-bar { flex-shrink: 0; width: 0.55rem; height: 1.1rem; border-radius: 999px; background: var(--accent); }
+  .week-legend-na { flex-shrink: 0; width: 0.55rem; height: 1.1rem; border-radius: 999px; background: rgb(255 255 255 / 12%); }
+  .home-v3-cta { background: color-mix(in srgb, var(--color-sand) 70%, white); }
+
+  .lang-chip {
+    display: inline-grid; place-items: center;
+    min-width: 2.75rem; min-height: 2.75rem; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    font-weight: 600; font-size: 0.95rem; line-height: 1;
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+  .lang-chip:hover { background: color-mix(in srgb, currentColor 10%, transparent); border-color: currentColor; }
+
+  /* Enough scene to recognise the activity, not a poster. */
+  .mode-tile-art { aspect-ratio: auto; height: clamp(8.5rem, 13vw, 11rem); }
+  @media (max-width: 639px) {
+    .mode-tile-art { height: 7.5rem; }
+    .mode-tile-text { padding: 0.7rem 0.8rem 0.8rem; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .night-scene .ns-camera, .night-scene .ns-deep, .night-scene .ns-warm, .night-scene .ns-fireglow { transition: none; }
+}
+
+/* ——— Revision 7: one-scroll MVP sections ——— */
+@layer components {
+  .why-panel { padding: 1.1rem 1.2rem; border-radius: 16px; background: rgb(255 255 255 / 4%); border: 1px solid rgb(255 255 255 / 9%); }
+  .why-more summary { display: inline-flex; min-height: 2.75rem; align-items: center; cursor: pointer; color: var(--color-star-2); text-decoration: underline; text-underline-offset: 0.25em; }
+  .home-v3-places { background: var(--color-sand); }
+  .preview-card { padding: 1rem 1.1rem; border-radius: 14px; background: color-mix(in srgb, var(--color-sand) 60%, white); border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent); }
+  .home-planner .mode-tile-art { height: clamp(7rem, 10vw, 9rem); }
+  .home-v3-cta { scroll-margin-top: 4.5rem; }
+}
+
+/* ——— Revision 8: the journey bar and the trip helper ——— */
+@layer components {
+  /* Three decisions and a destination, joined by a line; done steps keep their value. */
+  .journey { display: flex; flex-wrap: wrap; gap: 0.5rem 0.25rem; }
+  .journey li { position: relative; display: flex; }
+  .journey li + li::before { content: ""; align-self: center; width: 0.9rem; height: 1.5px; margin-inline: 0.1rem; background: color-mix(in srgb, var(--color-ink) 25%, transparent); }
+  .journey-step, .journey-end {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "n label" "n value";
+    column-gap: 0.5rem; align-items: center; min-height: 2.9rem; max-width: 12rem;
+    padding: 0.35rem 0.8rem 0.35rem 0.55rem; border-radius: 999px;
+    background: var(--color-sand-2); color: var(--color-ink-2); text-align: start; font-size: var(--text-small); line-height: 1.2;
+  }
+  :dir(rtl) .journey-step, :dir(rtl) .journey-end { padding: 0.35rem 0.55rem 0.35rem 0.8rem; }
+  .journey-step:not(:disabled):hover { background: var(--color-sand-3); color: var(--color-ink); }
+  .journey-step:disabled { cursor: default; }
+  .journey-n { grid-area: n; display: grid; place-items: center; width: 1.55rem; height: 1.55rem; border-radius: 999px; border: 1.5px solid currentColor; font-size: 0.78rem; font-weight: 600; }
+  .journey-label { grid-area: label; font-weight: 500; }
+  .journey-v { grid-area: value; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ink-2); font-size: 0.78rem; }
+  .journey li[data-done] .journey-step { color: var(--color-ink); }
+  .journey li[data-done] .journey-n { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-sand); }
+  .journey li[aria-current="step"] .journey-step, .journey li[aria-current="step"] .journey-end { background: var(--color-sky); color: var(--color-star); }
+  .journey li[aria-current="step"] .journey-n { border-color: var(--accent, var(--color-ember)); color: var(--accent, var(--color-ember)); }
+  .journey li[aria-current="step"] .journey-v { color: var(--color-star-2); }
+  .journey-end { border: 1.5px dashed color-mix(in srgb, var(--color-ink) 30%, transparent); background: transparent; }
+  .journey li[aria-current="step"] .journey-end { border-style: solid; border-color: var(--color-sky); }
+  @media (max-width: 639px) {
+    .journey { flex-wrap: nowrap; align-items: stretch; gap: 0.1rem; }
+    .journey li { flex: 1 1 0; min-width: 0; }
+    .journey li + li::before { width: 0.25rem; margin-inline: 0; }
+    .journey li:not([aria-current]) .journey-v { display: none; }
+    .journey-step, .journey-end { display: flex; width: 100%; max-width: none; min-height: 3.3rem; flex-direction: column; justify-content: center; gap: 0.2rem; padding: 0.35rem 0.1rem; border-radius: 12px; text-align: center; }
+    .journey li[aria-current] { flex: 1 1 0; min-width: 0; }
+    .journey li[aria-current] .journey-step, .journey li[aria-current] .journey-end { max-width: none; }
+    .journey-label { font-size: 0.7rem; line-height: 1.1; white-space: nowrap; }
+    .journey-n { width: 1.35rem; height: 1.35rem; }
+    .journey-end .journey-v { display: none; }
+    .journey-end .journey-label { white-space: nowrap; }
+  }
+
+  /* The trip helper: a quiet card beside the decision, with the mode's own small motif. */
+  .helper-card {
+    display: grid; grid-template-columns: 3.25rem minmax(0, 1fr); gap: 0.9rem; align-items: start;
+    width: 100%; max-width: 56rem; padding: 1rem 1.1rem; border-radius: 16px;
+    background: color-mix(in srgb, var(--accent, var(--color-clay)) 7%, var(--color-sand));
+    border: 1px solid color-mix(in srgb, var(--accent, var(--color-clay)) 28%, transparent);
+    border-inline-start: 4px solid var(--accent, var(--color-clay));
+    transition: background-color 180ms ease, border-color 180ms ease;
+  }
+  .helper-card.is-open { background: color-mix(in srgb, var(--accent, var(--color-clay)) 10%, var(--color-sand)); }
+  .helper-mark { position: relative; display: block; width: 3.25rem; height: 3.25rem; border-radius: 999px; background: var(--color-sky); overflow: hidden; }
+  .helper-mark::before, .helper-mark::after { content: ""; position: absolute; }
+  /* Kashta: a small fire over the sand. */
+  .helper-card[data-mode="kashta"] .helper-mark::before {
+    inset: 0;
+    background:
+      radial-gradient(ellipse 0.42rem 0.62rem at 50% 58%, #ffd9a0 0 35%, #f2a65a 36% 70%, transparent 71%),
+      radial-gradient(ellipse 0.72rem 1rem at 50% 62%, #e8894a 0 60%, transparent 61%),
+      radial-gradient(circle at 50% 70%, rgb(232 137 74 / 55%) 0, transparent 1.35rem);
+  }
+  .helper-card[data-mode="kashta"] .helper-mark::after { left: 50%; bottom: 0.45rem; width: 1.5rem; height: 0.2rem; translate: -50% 0; border-radius: 999px; background: #4a2c1f; }
+  /* Stargazing: a few stars over a dark horizon. */
+  .helper-card[data-mode="stars"] .helper-mark::before {
+    inset: 0;
+    background:
+      radial-gradient(circle at 30% 35%, #fff 0 1.1px, transparent 1.6px),
+      radial-gradient(circle at 62% 22%, #fff 0 1.4px, transparent 2px),
+      radial-gradient(circle at 75% 55%, #dfe8f7 0 0.9px, transparent 1.4px),
+      radial-gradient(circle at 45% 60%, #dfe8f7 0 0.8px, transparent 1.3px),
+      radial-gradient(circle at 20% 70%, #fff 0 0.7px, transparent 1.2px);
+  }
+  .helper-card[data-mode="stars"] .helper-mark::after { left: 0; right: 0; bottom: 0; height: 0.9rem; background: #11121c; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+  .helper-heading { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 0.7rem 1.25rem; }
+  .helper-name { display: flex; align-items: center; gap: 0.4rem; font-size: var(--text-small); font-weight: 600; color: var(--accent-ink, var(--color-clay)); }
+  .helper-name svg { flex: none; }
+  .helper-card[data-mode="stars"] { --accent-ink: #3c5a8a; }
+  .helper-line { margin-top: 0.15rem; line-height: 1.5; }
+  .helper-open { display: inline-flex; flex: none; align-items: center; gap: 0.45rem; min-height: 2.75rem; padding: 0.45rem 1rem; border-radius: 999px; background: var(--color-sky); color: var(--accent, var(--color-star)); font-weight: 600; transition: background-color 160ms ease, transform 160ms ease; }
+  .helper-open:hover { background: var(--color-sky-3); transform: translateY(-1px); }
+  .helper-open:focus-visible, .helper-sample:focus-visible { outline: 3px solid var(--accent-ink, var(--color-clay)); outline-offset: 3px; }
+  .helper-sample { display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 0.55rem; margin-top: 0.75rem; padding: 0.55rem 0.75rem; border: 1px solid color-mix(in srgb, var(--accent, var(--color-clay)) 24%, transparent); border-radius: 11px; background: color-mix(in srgb, white 60%, var(--color-sand)); text-align: start; font-size: var(--text-small); line-height: 1.4; }
+  .helper-sample:hover { background: white; border-color: color-mix(in srgb, var(--accent, var(--color-clay)) 55%, transparent); }
+  .helper-sample-label { flex: none; color: var(--accent-ink, var(--color-clay)); font-weight: 600; }
+  .helper-sample-arrow { flex: none; color: var(--accent-ink, var(--color-clay)); }
+  @media (max-width: 639px) {
+    .helper-card { grid-template-columns: 2.6rem minmax(0, 1fr); gap: 0.65rem; padding: 0.8rem 0.85rem; }
+    .helper-mark { width: 2.6rem; height: 2.6rem; }
+    .helper-heading { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .helper-open { min-height: 2.6rem; }
+    .helper-sample { width: 100%; align-items: start; flex-wrap: wrap; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .helper-card, .helper-open { transition: none; }
+  .helper-open:hover { transform: none; }
 }

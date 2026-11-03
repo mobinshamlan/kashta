@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { DestinationForecast } from "@/components/destination-forecast";
-import { PermitPanel } from "@/components/permit-panel";
+import { PermitBadge, PermitPanel } from "@/components/permit-panel";
 import { DESTINATIONS, estimateDrive, getDestination } from "@/lib/destinations";
 import { getDict } from "@/lib/locale";
 import { PHOTOS } from "@/lib/photos";
@@ -53,6 +53,13 @@ export default async function DestinationPage({ params, searchParams }: PageProp
               </Link>
             </nav>
             <h1 className="display max-w-[14ch]">{d.name[locale]}</h1>
+            <a href="#permit-heading" className="mt-5 inline-flex min-h-11 items-center gap-3 underline-offset-4 hover:underline">
+              <PermitBadge status={d.permit.status} label={dict.permit.short[d.permit.status]} />
+              <span className="small text-ink-2">{locale === "ar" ? "تفاصيل التصريح ومصدره" : "Permit details and source"}</span>
+            </a>
+            {d.permit.status === "unverified" && (
+              <p role="note" className="mt-4 max-w-[52ch] border-s-4 border-ink-2 bg-sand-2 p-4">{dict.permit.excluded}</p>
+            )}
             <p className="lead mt-6 max-w-[46ch]">{d.description[locale]}</p>
           </div>
           <dl className="destination-facts grid content-center gap-x-8 gap-y-5 sm:grid-cols-2">
@@ -62,27 +69,30 @@ export default async function DestinationPage({ params, searchParams }: PageProp
             </div>
             <div>
               <dt className="small text-ink-2">{dict.common.driveEstimate}</dt>
-              <dd className="num mt-1 lead">
-                {approxHours(drive.hours, locale)}
+              <dd className="mt-1 lead">
+                <span className="num">{approxHours(drive.hours, locale)}</span>
                 <span className="small block text-ink-2">
-                  {drive.straightKm} {dict.common.km} {dict.common.straightLine}
+                  <bdi className="num">{drive.straightKm} {dict.common.km}</bdi> {dict.common.straightLine}. {dict.common.estimateNote}.
                 </span>
               </dd>
             </div>
             <div>
               <dt className="small text-ink-2">{dict.detail.coordinates}</dt>
               <dd className="num mt-1" dir="ltr" style={{ textAlign: locale === "ar" ? "right" : "left" }}>
-                {d.lat.toFixed(4)}, {d.lon.toFixed(4)}
+                <bdi>{d.lat.toFixed(4)}, {d.lon.toFixed(4)}</bdi>
               </dd>
             </div>
             <div>
               <dt className="small text-ink-2">{dict.detail.capacity}</dt>
               <dd className="num mt-1">
-                <bdi dir="ltr">{d.capacity.camping ?? "—"} / {d.capacity.caravans ?? "—"}</bdi>
+                <span className="block">{locale === "ar" ? "مخيمات" : "Camps"}: <bdi>{d.capacity.camping ?? "—"}</bdi></span>
+                <span className="block">{locale === "ar" ? "كرفانات" : "Caravans"}: <bdi>{d.capacity.caravans ?? "—"}</bdi></span>
                 <span className="small block text-ink-2">{locale === "ar" ? "مخيمات / كرفانات" : "camps / caravans"}</span>
               </dd>
             </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 sm:col-span-2">
+            <div className="sm:col-span-2">
+              <dt className="sr-only">{dict.detail.location}</dt>
+              <dd className="flex flex-wrap gap-x-6 gap-y-2">
               <a
                 className="link inline-flex min-h-11 items-center gap-1.5"
                 href={d.officialMapUrl ?? `https://www.google.com/maps/search/?api=1&query=${d.lat},${d.lon}`}
@@ -96,6 +106,7 @@ export default async function DestinationPage({ params, searchParams }: PageProp
                 {dict.common.openOsm}
                 <ExternalLink aria-hidden size={14} />
               </a>
+              </dd>
             </div>
           </dl>
         </header>

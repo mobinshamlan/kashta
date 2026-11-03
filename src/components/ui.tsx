@@ -79,7 +79,7 @@ export function FactorBars({
   dealbreakers?: Factor[];
   dark?: boolean;
 }) {
-  const { dict } = useI18n();
+  const { locale, dict } = useI18n();
   const track = dark ? "bg-night-3" : "bg-sand-3";
   const fill = dark ? "bg-star" : "bg-ink";
   return (
@@ -97,7 +97,7 @@ export function FactorBars({
               )}
             </span>
             <span className={`small num ${dark ? "text-star-2" : "text-ink-2"}`} dir="ltr">
-              {f.value ?? "—"}
+              {f.value === null ? "—" : locale === "ar" ? f.value.replaceAll("km/h", "كم/س").replaceAll("°C", "°").replaceAll("μg/m³", "ميكروغرام/م³") : f.value}
             </span>
           </div>
           <div className="mt-1.5 flex items-center gap-3">
