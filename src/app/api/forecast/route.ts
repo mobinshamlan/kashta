@@ -1,6 +1,6 @@
 import type { ForecastResponse } from "@/lib/api-types";
 import { getDestination } from "@/lib/destinations";
-import { apiError, fromException } from "@/lib/http";
+import { apiError, fromException, privateJson } from "@/lib/http";
 import { fetchSiteForecasts } from "@/lib/site-forecasts";
 
 export async function GET(request: Request) {
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   try {
     const forecasts = await fetchSiteForecasts();
     const body: ForecastResponse = forecasts[slug];
-    return Response.json(body);
+    return privateJson(body);
   } catch (err) {
     return fromException(err);
   }

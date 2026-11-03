@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyInterpretationGuards } from "../src/lib/interpretation";
+import { applyInterpretationGuards, extractGroupSize } from "../src/lib/interpretation";
 import type { InterpretedPrefs } from "../src/lib/schemas";
 
 const parsed: InterpretedPrefs = {
@@ -72,4 +72,23 @@ test("an explicit dark-sky preference can still retain the moon priority", () =>
 
   assert.ok(prefs.priorities?.includes("moon"));
   assert.deepEqual(unsupported, []);
+});
+
+test("headcount and experience follow the user's words, not Llama's guess", () => {
+  const text = "حنا تسع ونبي نكشت هالأسبوع ونبي نشوف القمر ومانبي هوا وغبار";
+  const wrong = applyInterpretationGuards(text, { experience: "stars", groupSize: 5, priorities: ["moon"] });
+  assert.equal(wrong.prefs.groupSize, 9);
+  assert.equal(wrong.prefs.experience, "kashta");
+  assert.ok(!wrong.prefs.priorities?.includes("moon"));
+  const missing = applyInterpretationGuards(text, {});
+  assert.equal(missing.prefs.groupSize, 9);
+  assert.equal(missing.prefs.experience, "kashta");
+});
+
+test("headcount is read from digits and common spellings", () => {
+  assert.equal(extractGroupSize("حنا 7 نبي نكشت"), 7);
+  assert.equal(extractGroupSize("خمسة أشخاص بنطلع"), 5);
+  assert.equal(extractGroupSize("٣ اشخاص"), 3);
+  assert.equal(extractGroupSize("حنا تسعة"), 9);
+  assert.equal(extractGroupSize("نبي نكشت الخميس"), null);
 });
