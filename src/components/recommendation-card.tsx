@@ -55,6 +55,7 @@ export function RecommendationCard({
   headingLevel = 2,
   hours,
   compact = false,
+  facts = true,
   details,
 }: {
   row: ScoreRow;
@@ -67,6 +68,8 @@ export function RecommendationCard({
   hours?: HourPoint[];
   /** One reason and one practical line: the homepage answer, with details left to the plan. */
   compact?: boolean;
+  /** Compact only: show the drive and permit line (off when the next section shows them). */
+  facts?: boolean;
   /** Secondary forecast details, revealed only when asked for. */
   details?: ReactNode;
 }) {
@@ -102,7 +105,7 @@ export function RecommendationCard({
       {compact ? (
         <>
           {reasons.length > 0 && <ReasonList className="mt-5" reasons={reasons} />}
-          <p className="small muted mt-4 flex flex-wrap items-center gap-x-4 gap-y-1">
+          {facts && <p className="small muted mt-4 flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="inline-flex items-center gap-1.5" title={dict.common.estimateNote}>
               <Car aria-hidden size={16} />
               <bdi className="num">{approxHours(drive.hours, locale)}</bdi>
@@ -112,7 +115,7 @@ export function RecommendationCard({
               <PermitIcon aria-hidden size={16} />
               {dict.permit.short[d.permit.status]}
             </span>
-          </p>
+          </p>}
         </>
       ) : (<>
       <p className="mt-4 flex items-start gap-2">

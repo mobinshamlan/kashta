@@ -21,7 +21,7 @@ import { NightScene } from "./night-scene";
 import { NightWindow } from "./night-window";
 import { PlanRail } from "./plan-rail";
 import { RecommendationCard, ReasonList } from "./recommendation-card";
-import { SevenNights } from "./seven-nights";
+import { SevenNights, WeekLegend } from "./seven-nights";
 import { ErrorState, FactorBars, RATING_COLOR, Skeleton } from "./ui";
 
 type Field = keyof Omit<PlanPrefs, "city">;
@@ -67,9 +67,10 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
   const [step, setStep] = useState<1 | 2 | 3 | 4>(initialShare || (initialNight && initialPlace) ? 4 : initialExperience ? 2 : 1);
   const [night, setNight] = useState<string | null>(initialShare?.night ?? initialNight ?? null);
   const stepRef = useRef<HTMLHeadingElement>(null);
-  const [shareNotice, setShareNotice] = useState<{ night: string; nightOutsideCoverage: boolean; destinationUnavailable: boolean } | null>(null);
+  const [shareNotice, setShareNotice] = useState<{ night: string; nightOutsideCoverage: boolean; nightUnscored: boolean; destinationUnavailable: boolean } | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const startedShareRef = useRef<string | null>(null);
+  const handedUsed = useRef(false);
 
   const update = <K extends Field>(key: K, value: PlanPrefs[K]) => {
     setPrefs((p) => {
@@ -178,13 +179,18 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
           const nightOutsideCoverage = !res.data.nights.includes(share.night);
           const destinationRows = res.data.results.filter((row) => row.slug === share.slug);
           const exactRow = nightOutsideCoverage ? undefined : destinationRows.find((row) => row.date === share.night);
-          const sameDestinationRow = destinationRows.find((row) => row.score !== null) ?? destinationRows[0];
-          const first = exactRow ?? sameDestinationRow ?? res.data.results.find((row) => row.score !== null) ?? res.data.results[0];
+          // Only a scored night can be the plan; otherwise the same place's best scored night.
+          const exactScored = exactRow?.score != null ? exactRow : undefined;
+          const sameDestinationRow = destinationRows.filter((row) => row.score !== null).sort((a, b) => b.score! - a.score! || a.date.localeCompare(b.date))[0];
+          const first = exactScored ?? sameDestinationRow ?? res.data.results.find((row) => row.score !== null);
           setSelected(first ? `${first.slug}|${first.date}` : null);
-          setShareNotice({ night: share.night, nightOutsideCoverage, destinationUnavailable: destinationRows.length === 0 });
+          if (first) setNight(first.date);
+          setShareNotice({ night: share.night, nightOutsideCoverage, nightUnscored: !!exactRow && !exactScored, destinationUnavailable: destinationRows.length === 0 });
         } else {
           // A place handed over from the homepage stays chosen while it is still ranked.
-          const handed = initialPlace && initialNight ? res.data.results.find((row) => row.slug === initialPlace && row.date === initialNight && row.score !== null) : undefined;
+          // Used once: a later re-rank (Start over, new preferences) must not bring it back.
+          const handed = !handedUsed.current && initialPlace && initialNight ? res.data.results.find((row) => row.slug === initialPlace && row.date === initialNight && row.score !== null) : undefined;
+          handedUsed.current = true;
           setSelected((previous) => previous ?? (handed ? `${handed.slug}|${handed.date}` : null));
           setShareNotice(null);
         }
@@ -200,7 +206,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
       setPrefs(restoredPrefs);
       if (startedShareRef.current !== key) {
         startedShareRef.current = key;
-        savePrefs(restoredPrefs);
+        // A shared link shows the sender's settings without replacing the visitor's own saved ones.
         void submit(restoredPrefs, initialShare);
       }
       return;
@@ -249,7 +255,8 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
     const current = perNight.find((x) => x.night === top)?.best?.score ?? -1;
     return (n.best.score ?? -1) > current ? n.night : top;
   }, null);
-  const chosenNight = night && data?.nights.includes(night) ? night : bestNight;
+  // A night only counts while the forecast scores it (an address, share or helper may name another).
+  const chosenNight = night && perNight.some((n) => n.night === night && n.best) ? night : bestNight;
   const nightRows: ScoreRow[] = data && chosenNight
     ? data.results.filter((r) => r.date === chosenNight && r.score !== null).sort((a, b) => b.score! - a.score!)
     : [];
@@ -263,7 +270,38 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
     return row ? data.metrics[`${row.slug}|${n}`] : undefined;
   };
   const hoursFor = (row: ScoreRow) => data?.forecasts[row.slug]?.metrics.find((m) => m.date === row.date)?.hours;
+  // The address follows the plan, so reload and Back from a place page reopen these choices, and a
+  // used share link or description isn't applied again over later changes.
+  useEffect(() => {
+    if (!data) return;
+    const url = new URL(window.location.href);
+    ["share", "q", "destination", "night", "place", "exp"].forEach((k) => url.searchParams.delete(k));
+    [...url.searchParams.keys()].filter((k) => k !== "exp").forEach((k) => url.searchParams.delete(k));
+    url.searchParams.set("exp", prefs.experience);
+    if (step === 4 && chosenRow) {
+      url.searchParams.set("night", chosenRow.date);
+      url.searchParams.set("place", chosenRow.slug);
+    }
+    if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
+  }, [data, prefs.experience, step, chosenRow]);
   const placeHref = (row: ScoreRow) => `/destinations/${row.slug}?night=${row.date}&exp=${prefs.experience}`;
+
+  /** "Start over": default preferences (the current activity stays selected), no night, place or
+   *  description, back to step 1. Checklist ticks and fetched forecasts are untouched. */
+  const startOver = () => {
+    const next = { ...DEFAULT_PREFS, experience: prefs.experience };
+    setPrefs(next);
+    savePrefs(next);
+    setNight(null);
+    setSelected(null);
+    setText("");
+    setApplied(new Set());
+    setUnderstood(null);
+    setShareNotice(null);
+    setAdjustOpen(false);
+    if (!samePlanPrefs(next, plan.s === "ok" ? plan.prefs : DEFAULT_PREFS)) void submit(next);
+    goTo(1);
+  };
 
   const goTo = (next: 1 | 2 | 3 | 4) => {
     setStep(next);
@@ -483,6 +521,9 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
         {plan.s === "ok" && shareNotice?.nightOutsideCoverage && (
           <p role="status" className="small mt-3 border-s-2 border-clay bg-sand-2 p-3">{t.shareNightOutsideCoverage(formatNight(shareNotice.night, locale))}</p>
         )}
+        {plan.s === "ok" && shareNotice?.nightUnscored && (
+          <p role="status" className="small mt-3 border-s-2 border-clay bg-sand-2 p-3">{t.shareNightUnscored(formatNight(shareNotice.night, locale))}</p>
+        )}
         {plan.s === "ok" && shareNotice?.destinationUnavailable && (
           <p role="status" className="small mt-3 border-s-2 border-clay bg-sand-2 p-3">{t.shareDestinationUnavailable}</p>
         )}
@@ -539,10 +580,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
               {chosenNight && <p className="small mt-4 muted">{formatNight(chosenNight, locale)}</p>}
             </div>
             {/* Same legend as the homepage: what a tall bar and "incomplete" mean. */}
-            <ul className="week-legend small mt-3 text-ink-2" data-mode={prefs.experience}>
-              <li><span className="week-legend-bar" aria-hidden />{dict.home.weekBars[prefs.experience]}</li>
-              <li><span className="week-legend-na !bg-ink/20" aria-hidden />{dict.home.weekIncomplete}</li>
-            </ul>
+            <WeekLegend className="mt-3 text-ink-2" nights={perNight} mode={prefs.experience} />
             {!data.airQuality.available && <p className="small mt-3 text-ink-2">{t.airDown}</p>}
             {helper}
             <StepNav onBack={() => goTo(1)} backLabel={t.back} next={chosenNight ? { label: t.toPlace, onClick: () => goTo(3) } : undefined} />
@@ -620,12 +658,12 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
               row={chosenRow}
               metrics={data.metrics[`${chosenRow.slug}|${chosenRow.date}`]}
               experience={prefs.experience}
-              kicker={t.planReady}
+              kicker={dict.experience[prefs.experience]}
               hours={hoursFor(chosenRow)}
               actions={
                 <>
                   <Link href={`${placeHref(chosenRow)}#checklist-heading`} className="btn btn-accent">
-                    {t.openPlan}
+                    {dict.home.openFull}
                     <ArrowUpLeft aria-hidden size={18} className="direction-arrow" />
                   </Link>
                   <SharePlanButton slug={chosenRow.slug} night={chosenRow.date} prefs={prefs} dark />
@@ -634,14 +672,14 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
             />
             <div className="min-w-0">
               <details className="faq-item border-t border-ink/15">
-                <summary>{t.scoreBreakdown} <span className="num font-normal text-ink-2">({chosenRow.score ?? "—"}/100)</span></summary>
+                <summary>{t.scoreBreakdown}</summary>
                 <div className="pb-5">
                   {chosenRow.assessment === "incomplete" && <p className="mb-4 bg-sand-2 p-3">{t.incompleteNote} {chosenRow.missing.map((m) => dict.factor[m]).join(locale === "ar" ? "، " : ", ")}</p>}
                   <FactorBars factors={chosenRow.factors} dealbreakers={chosenRow.dealbreakers} />
                 </div>
               </details>
               {helper}
-              <StepNav onBack={() => goTo(3)} backLabel={t.back} />
+              <button type="button" className="link small mt-4 min-h-11" onClick={startOver}>{dict.home.startOver}</button>
             </div>
           </div>
         )}

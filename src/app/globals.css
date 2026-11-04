@@ -953,7 +953,7 @@
   .ready-choice-icon { display: grid; flex: none; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 999px; color: color-mix(in srgb, var(--accent) 82%, var(--color-ink)); background: color-mix(in srgb, var(--accent) 16%, var(--color-sand)); }
   .ready-k { color: var(--color-ink-2); font-size: var(--text-small); }
   .ready-v { align-self: center; font-size: clamp(1.05rem, 0.95rem + 0.45vw, 1.3rem); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
-  .ready-edit { justify-self: start; text-underline-offset: 0.2em; }
+  .ready-edit { justify-self: start; min-width: 2.75rem; text-underline-offset: 0.2em; }
 
   @media (max-width: 639px) {
     .ready-choices { grid-template-columns: minmax(0, 1fr); gap: 0.55rem; }
@@ -1198,7 +1198,6 @@
   .place-card[data-rank="rest"] .place-title { font-weight: 500; }
   .place-card[data-rank="first"] .place-title { font-size: var(--text-lead); }
   @media (min-width: 640px) {
-    .places-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .place-card[data-rank="first"] { grid-column: 1 / -1; }
   }
   .map-key { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; margin-bottom: 0.6rem; color: var(--color-ink-2); }
@@ -1208,4 +1207,425 @@
   .map-key-dot--poor { background: var(--color-ink-2); background-image: linear-gradient(45deg, transparent 42%, var(--color-sand) 42% 58%, transparent 58%); }
   .map-key-dot--none { border: 2px solid var(--color-ink-2); }
   .map-key-dot--excluded { border: 2px dashed var(--color-ink-2); }
+}
+
+/* ——— Revision 7: honest week, answer-first plan, places map ——— */
+@layer components {
+  /* Unscored night: an empty dashed track and the missing factor, never a fake short bar. */
+  .seven-night[data-state="incomplete"] .seven-bar-track { background: transparent; outline: 1.5px dashed rgb(255 255 255 / 32%); outline-offset: -1.5px; }
+  .seven-night[data-state="incomplete"] { cursor: default; }
+  .seven-night[data-state="incomplete"]:hover { background: transparent; }
+  .seven-na { display: inline-flex; flex-direction: column; align-items: center; gap: 0.1rem; font-size: 0.72rem; line-height: 1.1; color: rgb(255 255 255 / 72%); }
+  /* Poor night: a short bar in a dim, warm grey, so "known and bad" differs from "unknown". */
+  .seven-night[data-state="poor"] .seven-bar { background: color-mix(in srgb, var(--color-poor, #c56a4a) 55%, rgb(255 255 255 / 25%)); }
+  .week-legend-bar--poor { background: color-mix(in srgb, var(--color-poor, #c56a4a) 55%, rgb(255 255 255 / 25%)); }
+  .week-legend-na { background: transparent !important; outline: 1.5px dashed currentColor; outline-offset: -1.5px; opacity: 0.6; }
+}
+
+@layer components {
+  /* Places: map and list share one selected place. Phones: map first; desktop: list, map beside. */
+  .places-layout { display: grid; gap: 1.5rem; }
+  @media (min-width: 1024px) {
+    .places-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 2.5rem; align-items: start; }
+    .places-list-col { order: 0; }
+    .places-map-col { order: 1; position: sticky; top: 6rem; }
+  }
+
+  .places-reach { border: 0; padding: 0; margin: 0; }
+  .places-seg { display: inline-flex; padding: 0.25rem; border-radius: 999px; border: 1px solid rgb(255 255 255 / 22%); background: rgb(11 16 32 / 62%); backdrop-filter: blur(6px); }
+  .places-seg button { min-height: 2.75rem; padding: 0.4rem 1rem; border-radius: 999px; color: var(--color-star); font-weight: 500; transition: background-color 160ms ease, color 160ms ease; }
+  .places-seg button:hover { background: rgb(255 255 255 / 8%); }
+  .places-seg button[aria-pressed="true"] { background: var(--accent, var(--color-ember)); color: var(--color-sky); font-weight: 600; }
+
+  .place-card { padding: 0; }
+  .place-card[data-selected="true"] { border-color: color-mix(in srgb, var(--accent-ink, var(--color-clay)) 60%, transparent); box-shadow: 0 18px 36px -28px rgb(11 16 32 / 60%); background: color-mix(in srgb, var(--color-sand) 30%, white); }
+  .place-card[data-hover="true"]:not([data-selected="true"]) { border-color: color-mix(in srgb, var(--color-ink) 38%, transparent); }
+  .place-pick { display: flex; width: 100%; align-items: flex-start; gap: 0.75rem; padding: 0.85rem 1rem; text-align: start; border-radius: 16px; min-height: 3.25rem; }
+  .place-pick:focus-visible { outline: 3px solid var(--color-ink); outline-offset: -3px; }
+  .place-card[data-selected="true"] .place-title { font-size: var(--text-lead); }
+  .place-num[data-rating] { border: 0; color: #fff; margin-top: 0.1rem; }
+  .place-num[data-rating="excellent"], .place-num[data-rating="good"] { background: var(--color-good); }
+  .place-num[data-rating="fair"] { background: var(--color-fair); }
+  .place-num[data-rating="poor"] { background: var(--color-poor); }
+  .place-num[data-rating="unknown"] { background: transparent; border: 2px solid var(--color-ink-2); color: var(--color-ink); }
+  .place-more { padding: 0 1rem 1rem; padding-inline-start: 3.55rem; }
+  .place-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 0.5rem 1rem; padding-top: 0.75rem; border-top: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent); }
+  .place-facts dt { color: var(--color-ink-2); }
+  @media (max-width: 480px) { .place-more { padding-inline-start: 1rem; } }
+
+  /* The map on the night surface: navy ground, faint degree lines, lifted rating tones. */
+  .places-map {
+    --map-good: #7fbf6a; --map-fair: #e2b84f; --map-poor: #c98a7a;
+    margin: 0; border-radius: 18px; overflow: hidden;
+    background: var(--color-sky); color: var(--color-star);
+    box-shadow: 0 30px 60px -40px rgb(11 16 32 / 70%);
+  }
+  .places-map svg { display: block; width: 100%; height: auto; max-height: min(34rem, 70vh); touch-action: manipulation; }
+  .places-map .pm-bg { fill: var(--color-sky); }
+  .places-map .pm-grid line { stroke: rgb(255 255 255 / 7%); stroke-width: 1; }
+  .places-map .pm-ink { color: rgb(232 231 228 / 75%); }
+  .places-map .pm-halo { paint-order: stroke; stroke: var(--color-sky); stroke-width: 4px; stroke-linejoin: round; }
+  .places-map .pm-quiet circle { fill: rgb(255 255 255 / 18%); stroke: rgb(255 255 255 / 35%); stroke-width: 1; }
+  .places-map .pm-pin { cursor: pointer; }
+  .places-map .pm-leader { stroke: rgb(255 255 255 / 30%); stroke-width: 1.2; }
+  .places-map .pm-true { fill: rgb(255 255 255 / 70%); }
+  .places-map .pm-dot { stroke: var(--color-sky); stroke-width: 2.5; transition: r 200ms var(--ease-out-soft, ease); }
+  .places-map .pm-dot--none { fill: var(--color-sky); stroke: rgb(255 255 255 / 55%); stroke-width: 2; }
+  .places-map .pm-num { fill: var(--color-sky); pointer-events: none; }
+  .places-map .pm-num--none { fill: var(--color-star); }
+  .places-map .pm-slash { stroke: var(--color-sky); stroke-width: 2.2; pointer-events: none; }
+  .places-map .pm-pin[data-hover="true"] .pm-dot { stroke: var(--color-star); }
+  .places-map .pm-halo-ring { fill: none; stroke: var(--accent, var(--color-ember)); stroke-width: 3; opacity: 0.9; }
+  .places-map .pm-label rect { fill: var(--color-star); }
+  .places-map .pm-label text { fill: var(--color-sky); }
+  .pm-key { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; padding: 0.75rem 1rem 0.9rem; color: rgb(232 231 228 / 80%); border-top: 1px solid rgb(255 255 255 / 8%); }
+  .pm-key span { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .pm-key i { display: inline-block; width: 0.65rem; height: 0.65rem; border-radius: 999px; }
+  .pm-key .pm-key-none { border: 1.5px solid rgb(255 255 255 / 55%); }
+  .pm-key .pm-key-note { flex-basis: 100%; color: rgb(232 231 228 / 62%); }
+  @media (prefers-reduced-motion: reduce) { .places-map .pm-dot { transition: none; } }
+}
+
+@layer components {
+  /* The helper: a small night "window" header so it reads as a companion, not a form. */
+  .trip-helper { position: relative; overflow: hidden; box-shadow: 0 16px 34px -30px rgb(11 16 32 / 55%); }
+  .trip-helper::before { content: ""; position: absolute; inset-inline: 0; top: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--accent, var(--color-ember)), transparent); }
+  .trip-helper[data-mode="stars"] { --chip-ink: #2f4c7a; }
+  .trip-helper[data-mode="kashta"] { --chip-ink: var(--color-clay); }
+  .trip-helper .helper-chip { border-color: color-mix(in srgb, var(--chip-ink) 35%, transparent); background: color-mix(in srgb, var(--color-sand) 40%, white); }
+  .trip-helper .helper-chip:hover:not(:disabled) { border-color: var(--chip-ink); background: color-mix(in srgb, var(--chip-ink) 7%, white); }
+  .trip-helper .helper-chip:disabled { opacity: 0.55; cursor: default; }
+  .trip-helper .helper-chip:focus-visible { outline: 3px solid var(--chip-ink); outline-offset: 2px; }
+  .helper-run { min-height: 2.75rem; }
+}
+@layer components {
+  .helper-chip.helper-ask { display: inline-flex; flex-direction: row; align-items: center; gap: 0.45rem; white-space: nowrap; font-weight: 600; }
+  .helper-chip.helper-ask svg { flex: none; }
+  .trip-helper .helper-ask { color: var(--chip-ink); }
+}
+
+/* ——— Revision 8: one connected night — hero, week, map, plan ——— */
+@layer components {
+  .home-journey { background: var(--color-sky); overflow-x: clip; }
+
+  /* The rail: progress and section navigation in one, a strip of glass over the night. */
+  .plan-rail--night {
+    --rail-bg: #0d1222;
+    background: rgb(10 14 28 / 86%); backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgb(255 255 255 / 8%); color: var(--color-star);
+    padding-block: 0.55rem 0.4rem; margin-inline: 0; padding-inline: 0;
+  }
+  .plan-rail--night ol { max-width: 72rem; margin-inline: auto; padding-inline: clamp(0.75rem, 3vw, 2rem); }
+  .plan-rail--night ol::before { background: rgb(255 255 255 / 12%); }
+  .plan-rail--night ol::after { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--accent)); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent); }
+  [dir="rtl"] .plan-rail--night ol::after { background: linear-gradient(270deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--accent)); }
+  .plan-rail--night .rail-dot { background: var(--rail-bg); border-color: rgb(255 255 255 / 30%); color: var(--color-star-2); }
+  .plan-rail--night .rail-label { color: rgb(232 231 228 / 72%); }
+  .plan-rail--night .rail-value { color: rgb(232 231 228 / 62%); }
+  .plan-rail--night li[data-state="done"] .rail-dot { background: var(--accent); border-color: var(--accent); color: var(--color-sky); }
+  .plan-rail--night li[data-state="done"] .rail-label, .plan-rail--night li[data-state="current"] .rail-label { color: var(--color-star); }
+  .plan-rail--night li[data-state="current"] .rail-dot { background: var(--rail-bg); border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .plan-rail--night li[data-state="todo"] .rail-node:not(:disabled):hover .rail-dot { border-color: var(--color-star); }
+  .plan-rail--night .rail-node:focus-visible { outline-color: var(--color-star); }
+  .plan-rail--night .rail-node { min-height: 3.1rem; }
+  @media (max-width: 639px) { .plan-rail--night { padding-block: 0.4rem 0.25rem; } }
+
+  /* 1 · Hero: the answer stands on the scene's ground, lit by the mode's own light. */
+  .home-v4 { background: #0b1020; }
+  .home-v4-grid { position: relative; padding-block: clamp(1.75rem, 4vw, 3rem) clamp(1.5rem, 3vw, 2.5rem); }
+  .home-v4-main { max-width: 31rem; }
+  .home-v4-answer { margin-top: 1.5rem; }
+  .home-v4-answer .rec-card { box-shadow: 0 34px 70px -34px rgb(0 0 0 / 70%), 0 28px 80px -40px color-mix(in srgb, var(--accent) 70%, transparent); }
+  .home-v4-window { display: none; }
+  @media (max-width: 1023px) {
+    /* Phones and tablets: a window onto the scene between the choice and the answer. */
+    .home-v4-window { display: block; height: clamp(9rem, 34vw, 13rem); margin-inline: calc(-1 * clamp(1rem, 4vw, 2rem)); }
+    .home-v4-answer { margin-top: 0; }
+  }
+  @media (min-width: 1024px) { .home-v4-grid { min-height: 36rem; display: flex; align-items: center; } }
+
+  /* 2 · The week sits on the ground of the hero; the dunes then fall away into the map. */
+  .home-v4-week { background: linear-gradient(#17151f, #121426); }
+  .home-v4-places { position: relative; background: var(--color-sky); }
+  .home-v4-places::before {
+    content: ""; position: absolute; inset-inline: 0; top: -1px; height: clamp(2.5rem, 6vw, 4.5rem); pointer-events: none;
+    background: #121426;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 80' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1440V34C1300 62 1180 18 1020 40C860 62 760 14 600 36C440 58 300 20 160 44C90 56 40 52 0 46Z'/%3E%3C/svg%3E") top / 100% 100% no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 80' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1440V34C1300 62 1180 18 1020 40C860 62 760 14 600 36C440 58 300 20 160 44C90 56 40 52 0 46Z'/%3E%3C/svg%3E") top / 100% 100% no-repeat;
+    transform: translateX(calc(var(--wind, 0) * -18px)) scaleX(1.04);
+  }
+  .home-v4-places .frame { position: relative; padding-top: clamp(3rem, 6vw, 4.5rem); }
+
+  .home-places-grid { display: grid; gap: 1.25rem; }
+  @media (min-width: 1024px) {
+    .home-places-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 2.25rem; align-items: start; }
+    .home-places-map { position: sticky; top: 9.5rem; }
+  }
+  /* The map as ground: no box, edges fade into the night around it. */
+  .home-places .places-map { background: transparent; box-shadow: none; border-radius: 22px; }
+  .home-places .places-map svg {
+    max-height: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent), linear-gradient(transparent, #000 7%, #000 93%, transparent);
+    -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent), linear-gradient(transparent, #000 7%, #000 93%, transparent);
+    mask-composite: intersect;
+  }
+  .home-places .places-map .pm-bg { fill: transparent; }
+  .home-places .pm-key { border-top: 0; padding-inline: 0; }
+  .places-map[data-mode="kashta"] .pm-glow { opacity: 1.6; }
+  .places-map .pm-specks circle { fill: #dfe7f7; }
+  .places-map .pm-focus { fill: none; stroke: none; }
+  .places-map .pm-pin:focus { outline: none; }
+  .places-map .pm-pin:focus-visible .pm-focus { stroke: var(--color-star); stroke-width: 3; }
+  .places-map .pm-halo-ring { animation: pm-breathe 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes pm-breathe { 50% { opacity: 0.45; transform: scale(1.12); } }
+
+  /* The comparison list on the same night. */
+  .night-place { border-radius: 16px; background: rgb(255 255 255 / 4%); border: 1px solid rgb(255 255 255 / 9%); transition: background-color 160ms ease, border-color 160ms ease; }
+  .night-place[data-hover="true"] { border-color: rgb(255 255 255 / 24%); }
+  .night-place[data-selected="true"] { background: rgb(255 255 255 / 8%); border-color: color-mix(in srgb, var(--accent) 70%, transparent); box-shadow: 0 20px 40px -30px color-mix(in srgb, var(--accent) 80%, transparent); }
+  .night-place-pick { display: flex; width: 100%; align-items: flex-start; gap: 0.75rem; padding: 0.85rem 1rem; text-align: start; border-radius: 16px; min-height: 3.25rem; color: var(--color-star); }
+  .night-place-pick:focus-visible { outline: 3px solid var(--color-star); outline-offset: -3px; }
+  .night-place-num { display: grid; flex: none; place-items: center; width: 1.8rem; height: 1.8rem; margin-top: 0.05rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; color: var(--color-sky); background: #7fbf6a; }
+  .night-place-num[data-rating="fair"] { background: #e2b84f; }
+  .night-place-num[data-rating="poor"] { background: #c98a7a; }
+  .night-place-reason { gap: 0.3rem; }
+  .night-place-reason svg { width: 15px; height: 15px; }
+  .night-place-more { padding: 0 1rem 1rem; padding-inline-start: 3.55rem; color: rgb(232 231 228 / 85%); }
+  @media (max-width: 480px) { .night-place-more { padding-inline-start: 1rem; } }
+  .night-place .rec-rating { font-size: 0.78rem; }
+
+  /* The helper on the night: light glass, one-tap examples. */
+  .night-helper { align-self: start; padding: 1rem 1.1rem; border-radius: 16px; background: rgb(255 255 255 / 5%); border: 1px solid rgb(255 255 255 / 11%); }
+  .night-helper-icon { color: var(--accent); }
+  .night-helper-tag { padding: 0.05rem 0.5rem; border-radius: 999px; border: 1px solid rgb(255 255 255 / 25%); font-size: 0.72rem; color: rgb(232 231 228 / 78%); }
+  .night-chip { min-height: 2.75rem; padding: 0.4rem 0.95rem; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--color-star); font-size: var(--text-small); transition: background-color 160ms ease, border-color 160ms ease; }
+  .night-chip:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); }
+  .night-chip:disabled { opacity: 0.5; cursor: default; }
+  .night-chip--quiet { border-color: rgb(255 255 255 / 20%); color: rgb(232 231 228 / 85%); }
+  .night-field { min-height: 2.75rem; padding: 0.5rem 0.85rem; border-radius: 10px; background: rgb(0 0 0 / 25%); border: 1px solid rgb(255 255 255 / 22%); color: var(--color-star); }
+  .night-field::placeholder { color: rgb(232 231 228 / 55%); }
+
+  /* 4 · The plan at first light: night gives way to sand. */
+  .home-v4-plan { position: relative; background: linear-gradient(var(--color-sky), #2c2234 1.75rem, #8a6a58 3.5rem, #d9c3a8 5rem, color-mix(in srgb, var(--color-sand) 70%, white) 6.5rem); }
+  .home-v4-plan > .frame { padding-top: clamp(6.5rem, 10vw, 8rem); }
+  .plan-pending { max-width: 34rem; padding: 1.25rem 1.35rem; border-radius: 16px; border: 1.5px dashed color-mix(in srgb, var(--color-ink) 25%, transparent); }
+  .group-step { display: inline-flex; align-items: center; gap: 0.25rem; }
+  .group-step button { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--color-ink) 22%, transparent); }
+  .group-step button:hover:not(:disabled) { background: var(--color-sand-2); }
+  .group-step button:disabled { opacity: 0.4; }
+  .group-step output { min-width: 2rem; text-align: center; font-weight: 600; }
+  .group-step > span { margin-inline-end: 0.35rem; }
+  .plan-done .before-go { background: color-mix(in srgb, var(--color-sand) 40%, white); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .places-map .pm-halo-ring { animation: none; }
+    .home-v4-places::before { transform: none; }
+  }
+}
+
+@layer components {
+  /* Header + rail height, so a step's heading lands below them after a jump. */
+  .home-journey { --sticky-h: 8.5rem; }
+  @media (min-width: 1024px) { .home-journey { --sticky-h: 9.75rem; } }
+  .home-journey > section { scroll-margin-top: var(--sticky-h); }
+  /* Step headings take focus for screen readers and keyboards; the jump itself is the cue. */
+  [data-step-focus]:focus { outline: none; }
+  .places-map .pm-ink { color: rgb(232 231 228 / 92%); }
+  @media (max-width: 1023px) { .home-v4-window { height: clamp(5.5rem, 22vw, 8rem); } }
+}
+
+/* ——— Revision 9: dusk to first light — the week on the dunes, a woven threshold, a lit trail ——— */
+@layer components {
+  /* Section headings: Arabic in the wordmark's ruq'ah hand, English in the text face. */
+  .home-h2 { font-size: clamp(1.6rem, 1.25rem + 1.2vw, 2.2rem); font-weight: 600; line-height: 1.3; }
+  :lang(ar) .home-h2 { font-family: var(--font-ruqaa), var(--font-sans); font-weight: 700; line-height: 1.45; }
+  :lang(en) .home-h2 { letter-spacing: -0.015em; line-height: 1.15; }
+  .home-h2--sm { font-size: clamp(1.3rem, 1.1rem + 0.7vw, 1.6rem); }
+
+  /* Hero: the answer up top, the week laid on the dunes below it — one scene, no seam. */
+  .home-v5 { background: #0b1020; }
+  .home-v5-grid { position: relative; padding-block: clamp(1.75rem, 4vw, 3rem) clamp(1rem, 2vw, 1.5rem); }
+  .home-v5-week {
+    position: relative;
+    padding-block: clamp(1.25rem, 3vw, 2rem) clamp(1.75rem, 3vw, 2.5rem);
+    background: linear-gradient(rgb(14 14 26 / 0%), rgb(16 15 28 / 78%) 28%, #121426 100%);
+  }
+  .home-v5-week-grid { display: grid; gap: 1.25rem; }
+  @media (min-width: 1024px) {
+    .home-v5-grid { min-height: 30rem; display: flex; align-items: center; }
+    .home-v5-week-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 2.5rem; align-items: end; }
+  }
+
+  /* The threshold into the outing: the tent's woven edge, then the trail. */
+  .home-trail { position: relative; background: var(--color-sky); }
+  .home-trail-sadu { display: block; width: 100%; height: 14px; opacity: 0.9; }
+  .home-trail .plan-rail--night { position: sticky; top: 4rem; z-index: 20; }
+  @media (min-width: 1024px) { .home-trail .plan-rail--night { top: 4.5rem; } }
+  .home-journey { --sticky-h: 8.25rem; }
+  @media (min-width: 1024px) { .home-journey { --sticky-h: 9.5rem; } }
+  .home-journey #night, .home-journey #week { scroll-margin-top: 4.5rem; }
+  .home-v4-places::before { content: none; }
+
+  /* The rail as a trail across the sand: unlit stretch dashed, lit stretch glowing. */
+  .plan-rail--night ol::before {
+    background: repeating-linear-gradient(90deg, rgb(255 255 255 / 26%) 0 6px, transparent 6px 12px);
+  }
+  .plan-rail--night li[data-state="current"] .rail-dot::after {
+    content: ""; position: absolute; inset: -6px; border-radius: 999px;
+    border: 1.5px solid color-mix(in srgb, var(--accent) 60%, transparent);
+    animation: rail-lantern 2.6s ease-in-out infinite;
+  }
+  .plan-rail--night .rail-dot { position: relative; }
+  @keyframes rail-lantern { 50% { opacity: 0.25; transform: scale(1.15); } }
+
+  /* Places: map and its panel on one side, the short list on the other. */
+  .home-places-map { position: static !important; }
+  .home-places-grid { align-items: start; }
+  @media (min-width: 1024px) { .home-places-grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
+  .home-places .places-map svg { max-height: min(30rem, 62vh); margin-inline: auto; }
+  .places-map .pm-pin { animation: pm-in 520ms ease both; }
+  @keyframes pm-in { from { opacity: 0; } }
+
+  /* The selected place, attached to the map like a label card. */
+  .place-panel {
+    position: relative; margin-top: -0.25rem; padding: 1rem 1.15rem 0.9rem; border-radius: 16px;
+    background: rgb(23 32 56 / 92%); border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    box-shadow: 0 24px 50px -32px color-mix(in srgb, var(--accent) 80%, transparent);
+    animation: panel-in 300ms var(--ease-out-soft, ease) both;
+  }
+  @keyframes panel-in { from { opacity: 0; transform: translateY(6px); } }
+  .place-panel-name { font-size: var(--text-lead); font-weight: 600; line-height: 1.3; }
+  .place-panel-facts { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; color: rgb(232 231 228 / 86%); }
+  .place-panel-facts > span { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .place-panel-night { display: inline-flex; min-height: 2.75rem; align-items: center; color: var(--accent); text-decoration: underline; text-underline-offset: 0.25em; }
+  .place-panel .rec-reasons li { gap: 0.45rem; }
+
+  /* The list: one line per place, the panel holds the rest. */
+  .night-place-pick { align-items: center; padding-block: 0.7rem; }
+
+  /* The plan before it's used: a suggestion, labelled as one, with one action. */
+  .plan-suggest { max-width: 52rem; }
+  .plan-suggest-body { display: grid; gap: 1.25rem; }
+  @media (min-width: 768px) { .plan-suggest-body { grid-template-columns: minmax(0, 1fr) auto; align-items: end; } }
+  .plan-suggest-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 1rem; }
+  @media (min-width: 768px) { .plan-suggest-actions { flex-direction: column; align-items: stretch; text-align: center; } }
+  .plan-suggest-tag { padding: 0.15rem 0.65rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); color: var(--color-star); font-size: 0.78rem; font-weight: 600; }
+  .home-v4-plan > .frame { padding-top: clamp(6.5rem, 10vw, 8rem); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .plan-rail--night li[data-state="current"] .rail-dot::after, .places-map .pm-pin, .place-panel { animation: none; }
+  }
+}
+
+@layer components {
+  /* The scene lives in the upper stage so the camp stays in view; the week continues its ground. */
+  .home-v5-stage { position: relative; overflow: hidden; isolation: isolate; }
+  .home-v5-week { background: linear-gradient(#1d1a24, #121426); }
+}
+
+@layer components {
+  /* Header + rail (with step values) so headings land below both after a jump. */
+  .home-journey { --sticky-h: 9.25rem; }
+  @media (min-width: 1024px) { .home-journey { --sticky-h: 11.5rem; } }
+  .night-place .place-panel { margin: 0 0.6rem 0.6rem; margin-top: 0; animation-duration: 240ms; }
+  @media (max-width: 1023px) { .home-v4-window { height: clamp(7rem, 30vw, 10rem); } }
+}
+
+@layer components {
+  /* Inside the selected row the panel is part of the card, not a box within a box. */
+  .night-place .place-panel { background: transparent; border: 0; box-shadow: none; padding: 0 1rem 1rem; padding-inline-start: 3.55rem; margin: 0; }
+  @media (max-width: 480px) { .night-place .place-panel { padding-inline-start: 1rem; } }
+}
+
+@layer components {
+  /* Every step target on the homepage clears the header and the rail after a jump. */
+  .home-journey section[id], .home-journey [id="week"] { scroll-margin-top: var(--sticky-h); }
+  .home-journey #night { scroll-margin-top: 4.5rem; }
+  /* The phone scene window showed only dark sand; the hero already carries the scene. */
+  .home-v4-window { display: none !important; }
+}
+
+/* ——— Revision 10: the assistant beside the trail; concise place pages ——— */
+@layer components {
+  /* The trail: steps on one side, the assistant on the other (wide screens). */
+  .home-trail-grid { display: grid; }
+  @media (min-width: 1200px) {
+    .home-trail-grid { grid-template-columns: minmax(0, 1fr) 24rem; }
+    .home-trail-main .frame { padding-inline-end: clamp(1rem, 2vw, 2rem); }
+  }
+
+  .trip-chat { --chat-bg: #0d1324; color: var(--color-star); }
+  .trip-chat-panel { display: flex; flex-direction: column; min-height: 0; background: var(--chat-bg); }
+  .trip-chat-mark { display: grid; place-items: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .trip-chat-head { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.1rem 0.85rem; border-bottom: 1px solid rgb(255 255 255 / 8%); }
+  .trip-chat-close { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 999px; color: var(--color-star-2); }
+  .trip-chat-close:hover { background: rgb(255 255 255 / 8%); }
+  .trip-chat-log { flex: 1 1 auto; min-height: 8rem; overflow-y: auto; overscroll-behavior: contain; padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.7rem; scroll-behavior: smooth; }
+  .chat-msg { max-width: 92%; padding: 0.65rem 0.85rem; border-radius: 14px; font-size: 0.95rem; line-height: 1.6; animation: chat-in 260ms var(--ease-out-soft, ease) both; }
+  .chat-msg--bot { align-self: flex-start; background: rgb(255 255 255 / 6%); border: 1px solid rgb(255 255 255 / 8%); border-start-start-radius: 4px; }
+  .chat-msg--user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 24%, #1a2340); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-start-end-radius: 4px; }
+  @keyframes chat-in { from { opacity: 0; transform: translateY(4px); } }
+  .chat-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .chat-chips li { padding: 0.15rem 0.6rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 18%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); font-size: 0.82rem; }
+  .chat-caution { padding-inline-start: 0.6rem; border-inline-start: 2px solid #e8a07a; }
+  .chat-more { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; color: var(--accent); font-size: var(--text-small); font-weight: 600; }
+  .chat-list { display: grid; gap: 0.3rem; padding-inline-start: 1.1rem; list-style: disc; }
+  .chat-use { min-height: 2.75rem; padding: 0.4rem 1rem; border-radius: 10px; background: var(--accent); color: var(--color-sky); font-weight: 600; }
+  .chat-msg .rec-reasons { gap: 0.35rem; }
+  .chat-msg .rec-reasons svg { width: 15px; height: 15px; }
+  .trip-chat-foot { padding: 0.75rem 1.1rem 1rem; border-top: 1px solid rgb(255 255 255 / 8%); }
+  .trip-chat-examples { display: grid; gap: 0.4rem; }
+  .chat-example { min-height: 2.75rem; padding: 0.5rem 0.75rem; border-radius: 12px; text-align: start; font-size: 0.85rem; line-height: 1.5; color: var(--color-star); background: rgb(255 255 255 / 4%); border: 1px solid rgb(255 255 255 / 12%); transition: border-color 160ms ease, background-color 160ms ease; }
+  .chat-example:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .chat-example:disabled { opacity: 0.5; cursor: default; }
+  .chat-example--action { justify-self: start; border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); font-weight: 600; }
+  .trip-chat-form { display: flex; align-items: flex-end; gap: 0.5rem; margin-top: 0.6rem; }
+  .trip-chat-form textarea { flex: 1; min-height: 2.75rem; max-height: 8rem; resize: none; padding: 0.6rem 0.8rem; border-radius: 12px; background: rgb(0 0 0 / 28%); border: 1px solid rgb(255 255 255 / 20%); color: var(--color-star); field-sizing: content; }
+  .trip-chat-form textarea::placeholder { color: rgb(232 231 228 / 55%); }
+  .trip-chat-form textarea:focus-visible { outline: 3px solid var(--color-star); outline-offset: 1px; }
+  .trip-chat-send { display: grid; place-items: center; flex: none; width: 2.75rem; height: 2.75rem; border-radius: 12px; background: var(--accent); color: var(--color-sky); }
+  .trip-chat-send:disabled { opacity: 0.45; }
+  .trip-chat-limit { margin-top: 0.5rem; }
+  .trip-chat :focus-visible { outline-color: var(--color-star); }
+
+  /* Wide screens: a persistent column, sticky under the header, as tall as the screen allows. */
+  @media (min-width: 1200px) {
+    .trip-chat { position: sticky; top: 4.5rem; align-self: start; height: calc(100svh - 4.5rem); border-inline-start: 1px solid rgb(255 255 255 / 8%); }
+    .trip-chat-panel { height: 100%; }
+    .trip-chat-dock, .trip-chat-close { display: none; }
+  }
+  /* Smaller screens: a dock pinned to the bottom while the trail is on screen; it opens as a sheet. */
+  @media (max-width: 1199px) {
+    .trip-chat { position: sticky; bottom: 0; z-index: 30; padding: 0.5rem clamp(0.75rem, 3vw, 1.5rem) calc(0.5rem + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgb(8 11 22 / 85%) 40%); }
+    .trip-chat-dock { display: flex; width: 100%; align-items: center; gap: 0.75rem; min-height: 3.5rem; padding: 0.5rem 0.9rem; border-radius: 16px; background: var(--chat-bg); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 70%); color: var(--color-star); }
+    .trip-chat-panel { display: none; }
+    .trip-chat[data-open="true"] .trip-chat-dock { display: none; }
+    .trip-chat[data-open="true"] .trip-chat-panel { display: flex; position: fixed; inset-inline: 0; bottom: 0; z-index: 60; max-height: 82svh; border-radius: 20px 20px 0 0; box-shadow: 0 -20px 60px rgb(0 0 0 / 55%); animation: sheet-in 260ms var(--ease-out-soft, ease) both; padding-bottom: env(safe-area-inset-bottom); }
+    @keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } }
+  }
+
+  .plan-note { max-width: 52rem; padding: 0.6rem 0.9rem; border-radius: 10px; background: color-mix(in srgb, var(--color-clay) 12%, transparent); border-inline-start: 3px solid var(--color-clay); color: var(--color-ink); }
+
+  /* Place pages: the essentials on the night, reference behind one disclosure. */
+  .place-intro { background: linear-gradient(#0b1020, #17151f); }
+  .place-intro-grid { display: grid; gap: 1.5rem; padding-block: clamp(1.25rem, 3vw, 2rem) clamp(1.75rem, 4vw, 2.75rem); align-items: center; }
+  @media (min-width: 900px) { .place-intro-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 3rem; } }
+  .place-intro-title { margin-top: 0.5rem; font-size: clamp(2rem, 1.5rem + 2vw, 3rem); font-weight: 600; line-height: 1.2; }
+  :lang(ar) .place-intro-title { font-family: var(--font-ruqaa), var(--font-sans); font-weight: 700; line-height: 1.4; }
+  .place-intro-facts { display: flex; flex-wrap: wrap; gap: 1rem 2.5rem; }
+  .place-intro-photo { margin: 0; }
+  .place-more { border-top: 1px solid color-mix(in srgb, var(--color-ink) 15%, transparent); padding-top: 0.5rem; }
+  .place-more-summary { display: inline-flex; align-items: center; min-height: 2.75rem; cursor: pointer; font-weight: 600; text-decoration: underline; text-underline-offset: 0.3em; }
+  @media (prefers-reduced-motion: reduce) { .chat-msg, .trip-chat[data-open="true"] .trip-chat-panel { animation: none; } .trip-chat-log { scroll-behavior: auto; } }
+}
+
+@layer components {
+  /* Dimmed text inside the chat sits on dark: use the night's secondary ink, not the sand one. */
+  .trip-chat .muted, .trip-chat .rec-reasons .muted, .trip-chat .text-ink-2 { color: var(--color-star-2); }
+  .hero-ask { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2.75rem; margin-top: 0.75rem; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 0.3em; }
+}
+
+@layer components {
+  /* Wide screens show the chat beside the plan, with its own "explain" action. */
+  @media (min-width: 1200px) { .plan-explain { display: none; } }
 }

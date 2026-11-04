@@ -1,15 +1,8 @@
-import type { Metadata } from "next";
-import { DestinationIndex } from "@/components/destination-index";
-import { getDict } from "@/lib/locale";
+import { redirect } from "next/navigation";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const { dict } = await getDict();
-  return { title: dict.destinations.title, description: dict.destinations.lead };
-}
-
+/** Places now live on the homepage (map and list for the chosen night); keep old links working. */
 export default async function DestinationsPage({ searchParams }: PageProps<"/destinations">) {
   const sp = await searchParams;
   const mode = sp.mode === "stars" || sp.mode === "kashta" ? sp.mode : undefined;
-  // The page heading lives inside DestinationIndex, on the night scene that follows the mode.
-  return <DestinationIndex initialMode={mode} />;
+  redirect(mode ? `/?mode=${mode}#places` : "/#places");
 }

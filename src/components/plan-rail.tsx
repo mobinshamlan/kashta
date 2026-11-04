@@ -24,6 +24,8 @@ export function PlanRail({
   label,
   ready = false,
   showValues = true,
+  variant = "sand",
+  navigate = false,
 }: {
   steps: RailStep[];
   step: 1 | 2 | 3 | 4;
@@ -32,16 +34,20 @@ export function PlanRail({
   /** Every choice is made and the plan is the next thing: mark the last step as "next", not "current". */
   ready?: boolean;
   showValues?: boolean;
+  /** "night": the homepage's dark, glassy rail over the scene. */
+  variant?: "sand" | "night";
+  /** Section navigation: every reachable step (the current one too) scrolls to its section. */
+  navigate?: boolean;
 }) {
   const progress = ready ? 1 : (step - 1) / 3;
   return (
-    <nav className="plan-rail" aria-label={label}>
+    <nav className={`plan-rail ${variant === "night" ? "plan-rail--night" : ""}`} aria-label={label}>
       <ol style={{ "--rail-progress": progress } as CSSProperties}>
         {steps.map((s) => {
           const done = ready ? s.n < 4 : s.n < step;
           const current = !ready && s.n === step;
           const state = done ? "done" : current ? "current" : ready && s.n === 4 ? "next" : "todo";
-          const clickable = s.reachable && !current;
+          const clickable = s.reachable && (navigate || !current);
           return (
             <li key={s.n} data-state={state} aria-current={current ? "step" : undefined}>
               <button

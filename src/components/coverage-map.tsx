@@ -17,7 +17,7 @@ const SCALE_KM = 50;
  * Pushes scored dots apart so none overlap; each keeps a leader line to its true position,
  * so the map never misplaces a place, it only makes crowded ones readable.
  */
-function spread<T extends { x: number; y: number }>(points: T[], min: number) {
+export function spread<T extends { x: number; y: number }>(points: T[], min: number) {
   const out = points.map((p) => ({ ...p, dx: p.x, dy: p.y }));
   for (let pass = 0; pass < 60; pass++) {
     let moved = false;
@@ -39,7 +39,7 @@ function spread<T extends { x: number; y: number }>(points: T[], min: number) {
   return out;
 }
 
-function project(p: { lat: number; lon: number }) {
+export function project(p: { lat: number; lon: number }) {
   return { x: (p.lon - RIYADH.lon) * KM_PER_DEG_LON, y: -(p.lat - RIYADH.lat) * KM_PER_DEG_LAT };
 }
 
