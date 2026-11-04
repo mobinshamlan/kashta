@@ -55,6 +55,7 @@ export function CoverageMap({
   pick,
   mode,
   legendText,
+  numbered,
 }: {
   className?: string;
   compact?: boolean;
@@ -67,6 +68,8 @@ export function CoverageMap({
   /** Slug of the recommended place, ringed on the map. */
   pick?: string;
   mode?: Experience;
+  /** Slugs in list order: each dot shows its number, matching the numbered cards beside the map. */
+  numbered?: string[];
 }) {
   const { locale, dict } = useI18n();
   const scored = scores !== undefined;
@@ -81,9 +84,36 @@ export function CoverageMap({
     ? [...places].sort((a, b) => (a.d.slug === pick ? 1 : b.d.slug === pick ? -1 : (scores[a.d.slug] ?? -1) - (scores[b.d.slug] ?? -1)))
     : places;
   const showList = legend && !compact;
+  // Names for the pick and the next three scored places, so the map reads on its own.
+  const labelled = new Set<string>(
+    scored
+      ? [...places].filter((p) => scores[p.d.slug] != null && p.d.permit.status !== "unverified").sort((a, b) => (scores[b.d.slug] ?? -1) - (scores[a.d.slug] ?? -1)).slice(0, 4).map((p) => p.d.slug)
+      : [],
+  );
+  if (pick && !numbered) labelled.add(pick);
+  // With numbers, the list beside the map carries the names; the dots carry the numbers.
+  if (numbered) labelled.clear();
+  const numberOf = (slug: string) => (numbered ? numbered.indexOf(slug) + 1 : 0);
+  // When two labelled dots sit within a label's height, the later one goes above its dot.
+  const labelBelow = (slug: string) => {
+    const me = places.find((p) => p.d.slug === slug);
+    if (!me) return true;
+    return !places.some((o) => o.d.slug !== slug && labelled.has(o.d.slug) && o.d.slug < slug && Math.abs(o.dx - me.dx) < 90 && Math.abs(o.dy - me.dy) < 34);
+  };
 
   return (
     <figure className={`grid ${showList ? "gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start" : "gap-3"} ${className}`}>
+      {scored && !showList && (
+        <div className="map-key small" aria-label={legendText ?? dict.map.legendScore}>
+          <span className="map-key-title">{legendText ?? dict.map.legendScore}</span>
+          {([["excellent", `${dict.rating.excellent} / ${dict.rating.good}`], ["fair", dict.rating.fair]] as const).map(([r, word]) => (
+            <span key={r} className="map-key-item"><span aria-hidden className="map-key-dot" style={{ background: RATING_COLOR[r] }} />{word}</span>
+          ))}
+          <span className="map-key-item"><span aria-hidden className="map-key-dot map-key-dot--poor" />{dict.rating.poor}</span>
+          <span className="map-key-item"><span aria-hidden className="map-key-dot map-key-dot--none" />{dict.map.noScore}</span>
+          <span className="map-key-item"><span aria-hidden className="map-key-dot map-key-dot--excluded" />{dict.map.excluded}</span>
+        </div>
+      )}
       <svg
         className="coverage-map rounded-[14px] bg-sand-2"
         viewBox={`${-EXTENT} ${-EXTENT} ${EXTENT * 2} ${EXTENT * 2}`}
@@ -105,8 +135,8 @@ export function CoverageMap({
 
         {/* Riyadh: the only starting point. */}
         <g aria-hidden="true">
-          <rect x="-6" y="-6" width="12" height="12" fill="var(--color-ink)" transform="rotate(45)" />
-          <text direction={locale === "ar" ? "rtl" : "ltr"} x="12" y="20" fontSize="15" fontWeight="600" fill="var(--color-ink)">{dict.map.riyadh}</text>
+          <rect x="-8" y="-8" width="16" height="16" fill="var(--color-ink)" stroke="var(--color-sand)" strokeWidth="2" transform="rotate(45)" />
+          <text direction={locale === "ar" ? "rtl" : "ltr"} className="map-label" x="14" y="22" fontSize="15" fontWeight="700" fill="var(--color-ink)">{dict.map.riyadh}</text>
         </g>
 
         {drawOrder.map(({ d, hours, x: tx, y: ty, dx: x, dy: y }) => {
@@ -143,18 +173,32 @@ export function CoverageMap({
                   </text>
                 </>
               )}
+              {/* The best few carry their names; the rest stay dots so clusters don't pile labels. */}
+              {score !== null && labelled.has(d.slug) && (
+                <text direction={textDir} className="map-label" x={x} y={labelBelow(d.slug) ? y + 26 : y - 18} textAnchor="middle" fontSize="12" fill="var(--color-ink)">
+                  {d.name[locale]}
+                </text>
+              )}
               {score === null ? (
                 <circle
                   cx={x}
                   cy={y}
-                  r="11"
+                  r={numberOf(d.slug) ? 13 : 11}
                   fill="var(--color-sand)"
                   stroke="var(--color-ink-2)"
                   strokeWidth="2"
                   strokeDasharray={unverified ? "4 3" : undefined}
                 />
               ) : (
-                <circle cx={x} cy={y} r="12" fill={RATING_COLOR[rating(score)]} stroke="var(--color-sand)" strokeWidth="2.5" />
+                <circle cx={x} cy={y} r={numberOf(d.slug) ? 14 : 12} fill={rating(score) === "poor" ? "var(--color-ink-2)" : RATING_COLOR[rating(score)]} stroke="var(--color-sand)" strokeWidth="2.5" />
+              )}
+              {score !== null && rating(score) === "poor" && (
+                <line x1={x - 9} y1={y + 9} x2={x + 9} y2={y - 9} stroke="var(--color-sand)" strokeWidth="2.5" opacity="0.9" />
+              )}
+              {numberOf(d.slug) > 0 && (
+                <text x={x} y={y + 4.5} textAnchor="middle" fontSize="13" fontWeight="700" fill={score === null ? "var(--color-ink)" : "#fff"} style={{ pointerEvents: "none" }}>
+                  {numberOf(d.slug)}
+                </text>
               )}
             </a>
           );
@@ -190,21 +234,6 @@ export function CoverageMap({
       )}
       {!showList && (
         <figcaption className="small max-w-[52ch] text-ink-2">
-          {scored && (
-            <span className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span>{legendText ?? dict.map.legendScore}</span>
-              {([["excellent", `${dict.rating.excellent} / ${dict.rating.good}`], ["fair", dict.rating.fair], ["poor", dict.rating.poor]] as const).map(([r, word]) => (
-                <span key={r} className="inline-flex items-center gap-1.5">
-                  <span aria-hidden className="inline-block size-3 rounded-full" style={{ background: RATING_COLOR[r] }} />
-                  {word}
-                </span>
-              ))}
-              <span className="inline-flex items-center gap-1.5">
-                <span aria-hidden className="inline-block size-3 rounded-full border-2 border-dashed border-ink-2" />
-                {dict.map.excluded}
-              </span>
-            </span>
-          )}
           <span className="block">{locale === "ar" ? "النقاط من إحداثيات نقاط الدخول المنشورة، وما فيه طرق مرسومة." : "Dots are published entry points; no roads are drawn."}</span>
         </figcaption>
       )}

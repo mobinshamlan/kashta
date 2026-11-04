@@ -48,7 +48,8 @@ export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const panelId = useId();
-  const dark = pathname === "/";
+  // Pages that open on the night scene get the night header, so the two read as one surface.
+  const dark = pathname === "/" || pathname === "/destinations" || pathname === "/about";
 
   useEffect(() => {
     if (!open) return;
