@@ -34,14 +34,14 @@ export function SiteFooter() {
                 </Link>
               </li>
               <li>
-                <Link className="link inline-flex min-h-11 items-center" href="/about#faq">
+                <a className="link inline-flex min-h-11 items-center" href="/about#faq">
                   {locale === "ar" ? "أسئلة شائعة" : "FAQ"}
-                </Link>
+                </a>
               </li>
               <li>
-                <Link className="link inline-flex min-h-11 items-center" href="/about#credits">
+                <a className="link inline-flex min-h-11 items-center" href="/about#credits">
                   {dict.footer.credits}
-                </Link>
+                </a>
               </li>
             </ul>
           </nav>
@@ -53,9 +53,9 @@ export function SiteFooter() {
           <span className="mx-2" aria-hidden>
             ·
           </span>
-          <Link className="link" href="/about#privacy">
+          <a className="link" href="/about#privacy">
             {dict.footer.privacy}
-          </Link>
+          </a>
           <span className="mx-2" aria-hidden>
             ·
           </span>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ArrowUpLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Compass, Flag, Flame, LoaderCircle, SlidersHorizontal, Sparkles, Wand2 } from "lucide-react";
+import { ArrowUpLeft, ChevronDown, ChevronLeft, ChevronRight, Compass, Flame, LoaderCircle, SlidersHorizontal, Sparkles, Wand2 } from "lucide-react";
 import { rememberPlanForecasts } from "@/lib/forecast-storage";
 import type { NightSummary, PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
@@ -19,6 +19,7 @@ import { useI18n } from "./locale-provider";
 import { CoverageMap } from "./coverage-map";
 import { NightScene } from "./night-scene";
 import { NightWindow } from "./night-window";
+import { PlanRail } from "./plan-rail";
 import { RecommendationCard, ReasonList } from "./recommendation-card";
 import { SevenNights } from "./seven-nights";
 import { ErrorState, FactorBars, RATING_COLOR, Skeleton } from "./ui";
@@ -66,7 +67,6 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
   const [step, setStep] = useState<1 | 2 | 3 | 4>(initialShare || (initialNight && initialPlace) ? 4 : initialExperience ? 2 : 1);
   const [night, setNight] = useState<string | null>(initialShare?.night ?? initialNight ?? null);
   const stepRef = useRef<HTMLHeadingElement>(null);
-  const [helperOpen, setHelperOpen] = useState(!!initialText);
   const [shareNotice, setShareNotice] = useState<{ night: string; nightOutsideCoverage: boolean; destinationUnavailable: boolean } | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const startedShareRef = useRef<string | null>(null);
@@ -290,97 +290,99 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
     step > 2 && chosenNight ? formatNight(chosenNight, locale, { short: true }) : null,
     step > 3 && chosenDest ? chosenDest.name[locale] : null,
   ].filter(Boolean).join(sep);
-  const helperKey = step === 1 ? "activity" : step === 2 ? "night" : step === 3 ? "place" : "plan";
-
-  // The helper: one card that follows the step. Steps 1–3 read a description into the same
-  // choices; step 4 explains the plan from the server's own numbers.
+  // The helper: one visible, optional panel that follows the step. Steps 1–2 read a description
+  // into the same settings this page offers; steps 3–4 explain the chosen place and night from the
+  // server's own numbers. It never picks a place, changes a score or speaks for permits.
+  const h = dict.home.helper;
   const helperId = `${formId}-helper`;
+  const explainStep = step >= 3;
+  const samples = step === 2 ? h.prompts.night : h.prompts.activity;
   const helper = (
-    <aside className="helper-card mt-5" data-mode={prefs.experience} aria-labelledby={helperId}>
-      <span className="helper-mark" aria-hidden />
-      <div className="helper-body">
-        <p className="helper-name" id={helperId}>{dict.home.helper.name}</p>
-        <p className="helper-line">{dict.home.helper[helperKey]}</p>
-        <button type="button" className="helper-open" aria-expanded={helperOpen} aria-controls={`${helperId}-panel`} onClick={() => setHelperOpen((v) => !v)}>
-          {step === 4 ? dict.home.helper.ask : dict.home.helper.open}
-        </button>
-        <div id={`${helperId}-panel`} hidden={!helperOpen} className="mt-3">
-          {step === 4 ? (
-            data && chosenRow ? (
-              resultSettingsMatch
-                ? <ExplainPanel slug={chosenRow.slug} date={chosenRow.date} prefs={prefs} forecastKey={JSON.stringify([data.forecastFetchedAt, data.metrics[`${chosenRow.slug}|${chosenRow.date}`]])} />
-                : <p className="small text-ink-2">{t.explainNeedsPlan}</p>
-            ) : null
-          ) : (
-            <>
-              <label htmlFor={`${formId}-text`} className="sr-only">{t.describeLabel}</label>
-              <textarea
-                id={`${formId}-text`}
-                className="field min-h-24 resize-y"
-                value={text}
-                maxLength={600}
-                placeholder={dict.home.helper.placeholder[helperKey as "activity" | "night" | "place"]}
-                onChange={(e) => setText(e.target.value)}
-                aria-invalid={interpret.s === "error" && interpret.code === "invalid_input"}
-              />
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button type="button" className="btn plan-go" onClick={runInterpret} disabled={ai !== true || interpret.s === "loading"}>
-                  {interpret.s === "loading" ? <LoaderCircle aria-hidden size={18} className="animate-spin" /> : <Wand2 aria-hidden size={18} />}
-                  {interpret.s === "loading" ? t.describing : t.describeButton}
-                </button>
-                <span className="small num text-ink-2">{text.length}/600</span>
-              </div>
-              {ai === false && <p className="small mt-3 text-ink-2">{dict.errors.ai_not_configured}</p>}
-              <div aria-live="polite">
-                {interpret.s === "error" && <ErrorState className="mt-4" code={interpret.code} />}
-                {understood && (
-                  <div className="mt-4 rounded-xl bg-sand-2 p-4">
-                    <p className="small font-medium">{dict.home.helper.understood}</p>
-                    <p className="mt-1">{interpretedSummary(understood.prefs)}</p>
-                    {applied.size > 0 && (
-                      <p className="small mt-2">
-                        <span className="font-medium">{dict.home.helper.filled}</span>{" "}
-                        {[...applied].map((f) => appliedLabel(f)).filter(Boolean).join(locale === "ar" ? "، " : ", ")}
-                      </p>
-                    )}
-                    {understood.unsupported?.includes("moon_viewing") && <p role="status" className="small mt-2 text-ink-2">{t.moonViewingUnsupported}</p>}
-                    {!!understood.unclear?.length && <p className="small mt-2 text-ink-2">{t.unclear} {understood.unclear.join(locale === "ar" ? "، " : ", ")}</p>}
-                    <button type="button" className="btn-quiet mt-3" onClick={() => { savePrefs(prefs); void submit(prefs); goTo(understood.prefs.date && understood.prefs.date !== "flexible" ? 3 : 2); }}>{t.apply}</button>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+    <aside className="trip-helper mt-6" data-mode={prefs.experience} aria-labelledby={helperId}>
+      <div className="flex items-center gap-3">
+        <span className="helper-mark" aria-hidden />
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold" id={helperId}>{h.name}</span>
+            <span className="trip-helper-tag">{h.optional}</span>
+          </p>
+          <p className="small text-ink-2">{explainStep ? (step === 3 ? h.explainPlace : h.explainPlan) : h.describeWhatFull}</p>
         </div>
       </div>
+      {explainStep ? (
+        data && chosenRow ? (
+          <div className="mt-3">
+            {resultSettingsMatch
+              ? <ExplainPanel compact label={step === 3 ? h.askPlace : h.askPlan} slug={chosenRow.slug} date={chosenRow.date} prefs={prefs} forecastKey={JSON.stringify([data.forecastFetchedAt, data.metrics[`${chosenRow.slug}|${chosenRow.date}`]])} />
+              : <p className="small text-ink-2">{t.explainNeedsPlan}</p>}
+            <p className="small mt-3 text-ink-2">{h.limitExplain}</p>
+          </div>
+        ) : null
+      ) : (
+        <div className="mt-3">
+          <label htmlFor={`${formId}-text`} className="sr-only">{h.label}</label>
+          <textarea
+            id={`${formId}-text`}
+            className="field min-h-[4.5rem] resize-y"
+            rows={2}
+            value={text}
+            maxLength={600}
+            placeholder={h.placeholder}
+            onChange={(e) => setText(e.target.value)}
+            aria-invalid={interpret.s === "error" && interpret.code === "invalid_input"}
+          />
+          <p className="small mt-2 text-ink-2">{h.try}</p>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {samples.map((sample) => (
+              <button key={sample} type="button" className="helper-chip" onClick={() => setText(sample)}>{sample}</button>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="button" className="btn-quiet" onClick={runInterpret} disabled={ai !== true || interpret.s === "loading" || text.trim().length === 0}>
+              {interpret.s === "loading" ? <LoaderCircle aria-hidden size={18} className="animate-spin" /> : <Wand2 aria-hidden size={18} />}
+              {interpret.s === "loading" ? t.describing : h.submit}
+            </button>
+          </div>
+          {ai === false && <p className="small mt-3 text-ink-2">{dict.errors.ai_not_configured}</p>}
+          <div aria-live="polite">
+            {interpret.s === "error" && <ErrorState className="mt-4" code={interpret.code} />}
+            {understood && (
+              <div className="small mt-3 rounded-xl bg-sand-2 p-3">
+                <p><span className="font-medium">{h.understood}</span> {interpretedSummary(understood.prefs)}</p>
+                {applied.size > 0 && (
+                  <p className="mt-1">
+                    <span className="font-medium">{h.filled}</span>{" "}
+                    {[...applied].map((f) => appliedLabel(f)).filter(Boolean).join(locale === "ar" ? "، " : ", ")}
+                  </p>
+                )}
+                {understood.unsupported?.includes("moon_viewing") && <p role="status" className="mt-2 text-ink-2">{t.moonViewingUnsupported}</p>}
+                {!!understood.unclear?.length && <p className="mt-2 text-ink-2">{t.unclear} {understood.unclear.join(locale === "ar" ? "، " : ", ")}</p>}
+                <button type="button" className="btn-quiet mt-3" onClick={() => { savePrefs(prefs); void submit(prefs); goTo(understood.prefs.date && understood.prefs.date !== "flexible" ? 3 : 2); }}>{t.apply}</button>
+              </div>
+            )}
+          </div>
+          <p className="small mt-3 text-ink-2">{h.limitDescribe}</p>
+        </div>
+      )}
     </aside>
   );
 
   return (
     <div data-mode={prefs.experience}>
       {/* Where you are, and how to step back. */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <ol className="journey" aria-label={t.title}>
-          {STEPS.map((s) => {
-            const reachable = s.n <= 2 || (s.n === 3 && !!data);
-            return (
-              <li key={s.n} aria-current={step === s.n ? "step" : undefined} data-done={s.n < step || undefined}>
-                <button type="button" className="journey-step" disabled={!reachable || step === s.n} onClick={() => goTo(s.n)} aria-label={`${s.n}. ${s.label}${s.n < step && s.value ? `: ${s.value}` : ""}`}>
-                  <span className="journey-n num" aria-hidden>{s.n < step ? <Check size={13} /> : s.n}</span>
-                  <span className="journey-label">{s.label}</span>
-                  {s.n < step && s.value && <span className="journey-v">{s.value}</span>}
-                </button>
-              </li>
-            );
-          })}
-          {/* The destination: not a step to click, the thing the steps lead to. */}
-          <li className="journey-end" aria-current={step === 4 ? "step" : undefined}>
-            <span className="journey-n" aria-hidden><Flag size={13} /></span>
-            <span className="journey-label">{dict.home.journeyEnd}</span>
-            <span className="journey-v">{dict.home.journeyEndHint}</span>
-          </li>
-        </ol>
-        <button type="button" className="btn-quiet self-start md:self-auto" aria-expanded={adjustOpen} aria-controls={panelId} onClick={() => setAdjustOpen((v) => !v)}>
+      <PlanRail
+          label={t.title}
+          step={step}
+          onStep={goTo}
+          steps={[
+            { n: 1, label: t.steps.activity, value: STEPS[0].value, reachable: true },
+            { n: 2, label: t.steps.night, value: STEPS[1].value, reachable: true },
+            { n: 3, label: t.steps.place, value: STEPS[2].value, reachable: !!data },
+            { n: 4, label: t.steps.plan, reachable: !!data && !!chosenRow },
+          ]}
+        />
+      <div className="mt-4 flex justify-end">
+        <button type="button" className="btn-quiet" aria-expanded={adjustOpen} aria-controls={panelId} onClick={() => setAdjustOpen((v) => !v)}>
           <SlidersHorizontal aria-hidden size={18} />
           {t.more}
           <ChevronDown aria-hidden size={16} className={`transition-transform ${adjustOpen ? "rotate-180" : ""}`} />

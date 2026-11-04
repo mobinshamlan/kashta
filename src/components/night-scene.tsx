@@ -190,6 +190,11 @@ export function NightScene({ className = "", mode, tile = false }: { className?:
         </g>
 
         <path d="M0 790 C 220 770, 420 776, 640 786 C 860 798, 1080 780, 1260 770 C 1350 764, 1400 766, 1440 770 L 1440 900 L 0 900 Z" fill="#17151f" />
+        {/* Wind-blown sand along the near dune crest: slides a little with the page scroll. */}
+        <g className="ns-drift" opacity="0.5" fill="#2a2633">
+          <path d="M-60 786 C 120 776, 300 780, 480 788 C 700 798, 900 786, 1100 778 C 1260 772, 1400 774, 1500 778 L 1500 790 C 1300 788, 1120 786, 940 794 C 720 804, 500 796, 300 790 C 140 786, 20 788, -60 792 Z" />
+          <path d="M-60 812 C 160 806, 360 812, 560 818 C 760 824, 960 812, 1180 808 C 1320 806, 1420 808, 1500 810 L 1500 820 C 1360 818, 1200 820, 1020 824 C 820 828, 620 820, 420 816 C 240 812, 60 816, -60 820 Z" />
+        </g>
       </g>
     </svg>
   );

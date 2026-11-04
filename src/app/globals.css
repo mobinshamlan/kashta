@@ -886,16 +886,16 @@
   .helper-mark { position: relative; display: block; width: 3.25rem; height: 3.25rem; border-radius: 999px; background: var(--color-sky); overflow: hidden; }
   .helper-mark::before, .helper-mark::after { content: ""; position: absolute; }
   /* Kashta: a small fire over the sand. */
-  .helper-card[data-mode="kashta"] .helper-mark::before {
+  .helper-card[data-mode="kashta"] .helper-mark::before, .helper-row[data-mode="kashta"] .helper-mark::before {
     inset: 0;
     background:
       radial-gradient(ellipse 0.42rem 0.62rem at 50% 58%, #ffd9a0 0 35%, #f2a65a 36% 70%, transparent 71%),
       radial-gradient(ellipse 0.72rem 1rem at 50% 62%, #e8894a 0 60%, transparent 61%),
       radial-gradient(circle at 50% 70%, rgb(232 137 74 / 55%) 0, transparent 1.35rem);
   }
-  .helper-card[data-mode="kashta"] .helper-mark::after { left: 50%; bottom: 0.45rem; width: 1.5rem; height: 0.2rem; translate: -50% 0; border-radius: 999px; background: #4a2c1f; }
+  .helper-card[data-mode="kashta"] .helper-mark::after, .helper-row[data-mode="kashta"] .helper-mark::after { left: 50%; bottom: 0.45rem; width: 1.5rem; height: 0.2rem; translate: -50% 0; border-radius: 999px; background: #4a2c1f; }
   /* Stargazing: a few stars over a dark horizon. */
-  .helper-card[data-mode="stars"] .helper-mark::before {
+  .helper-card[data-mode="stars"] .helper-mark::before, .helper-row[data-mode="stars"] .helper-mark::before {
     inset: 0;
     background:
       radial-gradient(circle at 30% 35%, #fff 0 1.1px, transparent 1.6px),
@@ -904,7 +904,7 @@
       radial-gradient(circle at 45% 60%, #dfe8f7 0 0.8px, transparent 1.3px),
       radial-gradient(circle at 20% 70%, #fff 0 0.7px, transparent 1.2px);
   }
-  .helper-card[data-mode="stars"] .helper-mark::after { left: 0; right: 0; bottom: 0; height: 0.9rem; background: #11121c; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+  .helper-card[data-mode="stars"] .helper-mark::after, .helper-row[data-mode="stars"] .helper-mark::after { left: 0; right: 0; bottom: 0; height: 0.9rem; background: #11121c; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
   .helper-heading { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 0.7rem 1.25rem; }
   .helper-name { display: flex; align-items: center; gap: 0.4rem; font-size: var(--text-small); font-weight: 600; color: var(--accent-ink, var(--color-clay)); }
   .helper-name svg { flex: none; }
@@ -928,4 +928,257 @@
 @media (prefers-reduced-motion: reduce) {
   .helper-card, .helper-open { transition: none; }
   .helper-open:hover { transform: none; }
+}
+
+/* ——— Revision 9: the planner as a summary first; the helper as a quiet row ——— */
+@layer components {
+  .ready-choices { display: grid; gap: 0.5rem; max-width: 36rem; }
+  .ready-choices li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; min-height: 2.75rem; padding: 0.4rem 0.9rem; border-radius: 12px; background: var(--color-sand-2); }
+  .ready-k { color: var(--color-ink-2); font-size: var(--text-small); }
+  .ready-v { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .helper-row { max-width: 44rem; padding-top: 0.75rem; border-top: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent); }
+  .helper-row .helper-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 0.8rem; }
+  .helper-row .helper-heading > p { flex: 1 1 16rem; font-size: var(--text-small); color: var(--color-ink-2); }
+  .helper-row .helper-name { font-weight: 600; color: var(--color-ink); }
+  .helper-row .helper-mark { width: 1.9rem; height: 1.9rem; flex: none; }
+  .helper-row .helper-open { margin-top: 0; min-height: 2.5rem; padding: 0.3rem 0.8rem; font-size: var(--text-small); border-color: color-mix(in srgb, var(--color-ink) 25%, transparent); }
+  .helper-row.is-open { padding-bottom: 0.25rem; }
+  .map-label { paint-order: stroke; stroke: var(--color-sand-2); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+}
+
+@layer components {
+  /* The small row mark: the same fire and sky, scaled to the row. */
+  .helper-row .helper-mark { border-radius: 999px; background: var(--color-sky); }
+  .helper-row[data-mode="kashta"] .helper-mark::before {
+    background:
+      radial-gradient(ellipse 0.26rem 0.4rem at 50% 56%, #ffd9a0 0 35%, #f2a65a 36% 70%, transparent 71%),
+      radial-gradient(ellipse 0.46rem 0.64rem at 50% 60%, #e8894a 0 60%, transparent 61%),
+      radial-gradient(circle at 50% 70%, rgb(232 137 74 / 55%) 0, transparent 0.85rem);
+  }
+  .helper-row[data-mode="kashta"] .helper-mark::after { bottom: 0.3rem; width: 0.95rem; height: 0.14rem; }
+  .helper-row[data-mode="stars"] .helper-mark::after { height: 0.55rem; }
+}
+
+/* ——— Revision 10: progress rail, step entrance, trip helper, "before you go", Places and method ——— */
+@layer components {
+  /* The rail: four nodes on one line; the line fills as the plan advances. Sticky inside the planner only. */
+  .plan-rail {
+    --rail-bg: var(--color-sand);
+    position: sticky; top: 4rem; z-index: 20;
+    margin-inline: calc(-1 * clamp(1.25rem, 3.2vw, 3rem));
+    padding: 0.65rem clamp(1.25rem, 3.2vw, 3rem) 0.55rem;
+    background: color-mix(in srgb, var(--rail-bg) 94%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent);
+  }
+  @media (min-width: 1024px) { .plan-rail { top: 4.5rem; } }
+  .home-v3-cta .plan-rail { --rail-bg: color-mix(in srgb, var(--color-sand) 70%, white); }
+  .plan-rail ol { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .plan-rail ol::before, .plan-rail ol::after {
+    content: ""; position: absolute; top: calc(1.125rem - 1.5px); height: 3px; border-radius: 999px;
+    inset-inline: 0; width: auto;
+  }
+  .plan-rail ol::before { background: color-mix(in srgb, var(--color-ink) 14%, transparent); }
+  .plan-rail ol::after {
+    background: var(--color-sky);
+    transform: scaleX(var(--rail-progress, 0)); transform-origin: left center;
+    transition: transform 450ms var(--ease-out-soft);
+  }
+  [dir="rtl"] .plan-rail ol::after { transform-origin: right center; }
+  .rail-node { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; width: 100%; min-height: 3.6rem; padding-inline: 0.15rem; text-align: center; border-radius: 12px; }
+  .rail-node:disabled { cursor: default; }
+  .rail-node:focus-visible { outline: 3px solid var(--color-clay); outline-offset: 2px; }
+  .rail-dot {
+    position: relative; z-index: 1; display: grid; place-items: center;
+    width: 2.25rem; height: 2.25rem; border-radius: 999px;
+    background: var(--rail-bg); border: 2px solid color-mix(in srgb, var(--color-ink) 28%, transparent);
+    color: var(--color-ink-2); font-size: 0.85rem; font-weight: 700;
+    transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease, box-shadow 300ms ease, transform 300ms var(--ease-out-soft);
+  }
+  .rail-label { font-size: 0.85rem; font-weight: 500; color: var(--color-ink-2); line-height: 1.2; }
+  .rail-value { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; color: var(--color-ink-2); }
+  .plan-rail li[data-state="done"] .rail-dot { background: var(--color-sky); border-color: var(--color-sky); color: var(--accent, var(--color-ember)); }
+  .plan-rail li[data-state="done"] .rail-label { color: var(--color-ink); }
+  .plan-rail li[data-state="done"] .rail-node:hover .rail-dot { transform: scale(1.06); }
+  .plan-rail li[data-state="current"] .rail-dot {
+    background: var(--accent, var(--color-ember)); border-color: var(--color-sky); color: var(--color-sky);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent, var(--color-ember)) 28%, transparent);
+    transform: scale(1.08);
+  }
+  .plan-rail li[data-state="current"] .rail-label { color: var(--color-ink); font-weight: 700; }
+  .plan-rail li[data-state="next"] .rail-dot { border-color: var(--color-sky); color: var(--color-sky); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, var(--color-ember)) 30%, transparent); }
+  .plan-rail li[data-state="next"] .rail-label { color: var(--color-ink); font-weight: 600; }
+  .plan-rail li[data-state="todo"] .rail-node:not(:disabled):hover .rail-dot { border-color: var(--color-ink); }
+  @media (max-width: 639px) {
+    .rail-value { display: none; }
+    .rail-label { font-size: 0.78rem; }
+  }
+
+  /* Each step arrives once, briefly; the heading takes focus without a visible ring. */
+  .plan-step-in { animation: plan-step-in 320ms var(--ease-out-soft) both; }
+  .plan-step-title { scroll-margin-top: 10rem; outline: none; }
+
+  .plan-body.has-helper { display: grid; gap: 1.75rem; }
+  @media (min-width: 1024px) {
+    .plan-body.has-helper { grid-template-columns: minmax(0, 1fr) 20rem; gap: 2.5rem; align-items: start; }
+    .plan-body.has-helper > .trip-helper { position: sticky; top: 11rem; }
+  }
+
+  /* The trip helper: a calm card with the mode's own small motif and a visible way to use it. */
+  .trip-helper { padding: 1rem 1.1rem 1.1rem; border-radius: 16px; background: color-mix(in srgb, var(--color-sand) 50%, white); border: 1px solid color-mix(in srgb, var(--color-ink) 13%, transparent); }
+  .trip-helper .helper-mark { position: relative; display: block; flex: none; width: 2.75rem; height: 2.75rem; border-radius: 999px; background: var(--color-sky); overflow: hidden; }
+  .trip-helper .helper-mark::before, .trip-helper .helper-mark::after { content: ""; position: absolute; }
+  .trip-helper[data-mode="kashta"] .helper-mark::before {
+    inset: 0;
+    background:
+      radial-gradient(ellipse 0.36rem 0.54rem at 50% 58%, #ffd9a0 0 35%, #f2a65a 36% 70%, transparent 71%),
+      radial-gradient(ellipse 0.62rem 0.86rem at 50% 62%, #e8894a 0 60%, transparent 61%),
+      radial-gradient(circle at 50% 70%, rgb(232 137 74 / 55%) 0, transparent 1.15rem);
+  }
+  .trip-helper[data-mode="kashta"] .helper-mark::after { left: 50%; bottom: 0.38rem; width: 1.3rem; height: 0.18rem; translate: -50% 0; border-radius: 999px; background: #4a2c1f; }
+  .trip-helper[data-mode="stars"] .helper-mark::before {
+    inset: 0;
+    background:
+      radial-gradient(circle at 30% 32%, #fff 0 1.1px, transparent 1.6px),
+      radial-gradient(circle at 64% 22%, #fff 0 1.4px, transparent 2px),
+      radial-gradient(circle at 76% 52%, #dfe8f7 0 0.9px, transparent 1.4px),
+      radial-gradient(circle at 46% 56%, #dfe8f7 0 0.8px, transparent 1.3px),
+      radial-gradient(circle at 22% 66%, #fff 0 0.7px, transparent 1.2px);
+  }
+  .trip-helper[data-mode="stars"] .helper-mark::after { left: 0; right: 0; bottom: 0; height: 0.75rem; background: #11121c; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+  .trip-helper-tag { padding: 0.05rem 0.5rem; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--color-ink) 25%, transparent); font-size: 0.72rem; color: var(--color-ink-2); }
+  .helper-chip {
+    min-height: 2.75rem; padding: 0.35rem 0.85rem; border-radius: 999px; text-align: start;
+    border: 1px solid color-mix(in srgb, var(--color-ink) 22%, transparent); background: var(--color-sand);
+    font-size: var(--text-small); line-height: 1.35; transition: border-color 160ms ease, background-color 160ms ease;
+  }
+  .helper-chip:hover { border-color: var(--color-ink); background: var(--color-sand-2); }
+
+  /* "Before you go": the leave time on a night chip, then a short tickable list. */
+  .before-go { padding: 1rem 1.1rem; border-radius: 16px; background: color-mix(in srgb, var(--color-sand) 50%, white); border: 1px solid color-mix(in srgb, var(--color-ink) 13%, transparent); }
+  .before-go + .trip-helper { margin-top: 1.25rem; }
+  .before-go-time { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.7rem 0.85rem; border-radius: 12px; background: var(--color-sky); color: var(--color-star); }
+  .before-go-time svg { margin-top: 0.15rem; color: var(--accent, var(--color-ember)); }
+  .before-go-note { color: var(--color-star-2); }
+  .before-go-list li + li { border-top: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent); }
+  .before-go-item { position: relative; display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); align-items: start; gap: 0.65rem; min-height: 2.75rem; padding: 0.55rem 0.1rem; cursor: pointer; }
+  .before-go-item input { position: absolute; inset-inline-start: 0.1rem; top: 0.6rem; width: 1.5rem; height: 1.5rem; margin: 0; opacity: 0; cursor: pointer; }
+  .before-go-box { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; margin-top: 0.1rem; border-radius: 7px; border: 2px solid var(--color-ink-2); color: transparent; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+  .before-go-item input:checked + .before-go-box { background: var(--color-olive); border-color: var(--color-olive); color: var(--color-sand); }
+  .before-go-item input:checked ~ span:last-child { color: var(--color-ink-2); }
+  .before-go-item input:focus-visible + .before-go-box { outline: 3px solid var(--color-clay); outline-offset: 2px; }
+
+  /* Places: the night scene as the page head, then readable cards and a map that share numbers. */
+  .places-hero, .method-hero { background: #0b1020; }
+  .places-hero-inner, .method-hero-inner { position: relative; padding-block: clamp(2rem, 5vw, 3.25rem) clamp(2.25rem, 5vw, 3.5rem); }
+  .places-title { font-family: var(--font-ruqaa), var(--font-sans); font-size: clamp(2.2rem, 1.6rem + 2.2vw, 3.2rem); line-height: 1.4; }
+  :lang(en) .places-title { font-family: var(--font-sans); font-weight: 600; line-height: 1.1; letter-spacing: -0.015em; }
+  .places-toggle { min-height: 2.75rem; padding: 0.45rem 1.05rem; border-radius: 999px; border: 1px solid rgb(255 255 255 / 30%); background: rgb(11 16 32 / 62%); color: var(--color-star); backdrop-filter: blur(6px); transition: background-color 160ms ease, border-color 160ms ease; }
+  .places-toggle:hover { border-color: rgb(255 255 255 / 60%); }
+  .places-toggle[aria-pressed="true"] { background: var(--accent, var(--color-ember)); border-color: var(--accent, var(--color-ember)); color: var(--color-sky); font-weight: 600; }
+  .place-card { display: flex; flex-direction: column; padding: 1rem 1.1rem; border-radius: 16px; background: color-mix(in srgb, var(--color-sand) 55%, white); border: 1px solid color-mix(in srgb, var(--color-ink) 13%, transparent); transition: border-color 160ms ease; }
+  .place-card:hover { border-color: color-mix(in srgb, var(--color-ink) 32%, transparent); }
+  .place-num { display: grid; flex: none; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 999px; border: 2px solid var(--color-ink-2); font-size: 0.8rem; font-weight: 700; color: var(--color-ink); }
+
+  /* Methodology: three steps drawn from the scorer's own constants, then the limits, then details. */
+  .method-flow { position: relative; display: grid; gap: 1.6rem; margin-top: 2.25rem; }
+  @media (min-width: 900px) { .method-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.75rem; } }
+  .method-step { position: relative; padding: 1.25rem 1.25rem 1.35rem; border-radius: 18px; background: color-mix(in srgb, var(--color-sand) 55%, white); border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent); }
+  .method-step:not(:last-child)::after {
+    content: "↓"; position: absolute; left: 50%; bottom: -1.45rem; translate: -50% 0;
+    font-size: 1.1rem; font-weight: 700; color: var(--color-ink-2);
+  }
+  @media (min-width: 900px) {
+    .method-step:not(:last-child)::after { content: "→"; left: auto; bottom: auto; top: 50%; translate: 0 -50%; inset-inline-end: -1.45rem; }
+    :dir(rtl) .method-step:not(:last-child)::after { content: "←"; }
+  }
+  .method-n { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; margin-bottom: 0.6rem; border-radius: 999px; background: var(--color-sky); color: var(--color-star); font-weight: 700; font-size: 0.85rem; }
+  .method-factors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+  .method-factors li { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 0.55rem 0.25rem; border-radius: 12px; background: var(--color-sand-2); font-size: var(--text-small); text-align: center; }
+  .method-weights { display: flex; gap: 2px; height: 1.9rem; overflow: hidden; border-radius: 8px; }
+  .method-weights > span { display: grid; place-items: center; min-width: 4px; color: #fff; font-size: 0.72rem; font-weight: 700; }
+  .method-bands li { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding-block: 0.4rem; border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent); }
+  .method-band-chip { padding: 0.2rem 0.7rem; border-radius: 999px; background: color-mix(in srgb, var(--rating) 14%, var(--color-sand)); border: 1px solid color-mix(in srgb, var(--rating) 55%, transparent); color: var(--rating); font-size: var(--text-small); font-weight: 600; }
+  .method-limits { margin-top: 2.5rem; padding: 1.25rem 1.35rem; border-radius: 18px; background: var(--color-sand-2); }
+  .method-more-list { margin-top: 2.5rem; max-width: 56rem; }
+  .method-more { border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 15%, transparent); }
+  .method-more:first-of-type { margin-top: 0.75rem; border-top: 1px solid color-mix(in srgb, var(--color-ink) 15%, transparent); }
+  .method-more summary { display: flex; min-height: 3.25rem; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 0.75rem; font-weight: 500; list-style: none; cursor: pointer; }
+  .method-more summary::-webkit-details-marker { display: none; }
+  .method-more summary::after { content: "+"; font-size: 1.4rem; font-weight: 300; line-height: 1; }
+  .method-more[open] summary::after { content: "−"; }
+  .method-more summary:focus-visible { outline: 3px solid var(--color-clay); outline-offset: 2px; }
+  .method-more-body { padding-bottom: 1.25rem; }
+  .method-faq { margin-top: 2.5rem; max-width: 56rem; scroll-margin-top: 6rem; }
+  [id="formula"], [id="data"], [id="permit"], [id="ai"], [id="privacy"], [id="credits"], [id="how"] { scroll-margin-top: 6rem; }
+}
+@keyframes plan-step-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .plan-step-in { animation: none; }
+  .plan-rail ol::after, .rail-dot { transition: none; }
+  .plan-rail li[data-state="current"] .rail-dot { transform: none; }
+}
+
+@layer components {
+  .before-go-link { margin-inline-start: 2.15rem; margin-top: -0.5rem; }
+}
+
+/* ——— Revision 11: full-width rail, tile selection, wind drift ——— */
+@layer components {
+  /* The rail spans the content; the fill line reads as progress at any width. */
+  .plan-rail ol::before, .plan-rail ol::after { height: 4px; }
+  .plan-rail ol::before { background: color-mix(in srgb, var(--color-ink) 12%, transparent); }
+  .plan-rail ol::after {
+    inset-inline: 12.5%; width: auto;
+    background: color-mix(in srgb, var(--accent, var(--color-ember)) 55%, var(--color-ink));
+  }
+  .rail-dot { width: 2.5rem; height: 2.5rem; font-size: 0.9rem; }
+  .plan-rail ol::before, .plan-rail ol::after { top: calc(1.25rem - 2px); }
+  .plan-rail li[data-state="todo"] .rail-dot { background: var(--rail-bg); }
+  .rail-label { font-size: 0.9rem; }
+  @media (max-width: 639px) {
+    .rail-dot { width: 2.1rem; height: 2.1rem; font-size: 0.8rem; }
+    .plan-rail ol::before, .plan-rail ol::after { top: calc(1.05rem - 2px); }
+    .rail-label { font-size: 0.74rem; }
+  }
+
+  /* Activity tiles: the chosen one lifts and blooms in its own colour; the other dims a little. */
+  .home-planner .mode-tile, .planner-results .mode-tile { transition: outline-color 200ms ease, transform 260ms var(--ease-out-soft), box-shadow 260ms ease, opacity 200ms ease; }
+  .home-planner .mode-tile:has(input:checked), .planner-results .mode-tile:has(input:checked) { transform: translateY(-3px); box-shadow: 0 18px 36px -22px var(--accent); }
+  .home-planner fieldset:has(input:checked) .mode-tile:not(:has(input:checked)) { opacity: 0.78; }
+  .home-planner .mode-tile:hover { opacity: 1; }
+  .mode-tile-text { position: relative; }
+  .mode-tile:has(input:checked) .mode-tile-text::after { content: "✓"; position: absolute; inset-inline-end: 1rem; top: 1rem; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 999px; background: var(--accent); color: var(--color-sky); font-size: 0.85rem; font-weight: 700; }
+  /* Kashta: the fire flares as the tile is chosen. */
+  .mode-tile[data-mode="kashta"]:has(input:checked) .ns-flame { animation: flare 700ms var(--ease-out-soft) 1; transform-box: fill-box; transform-origin: 50% 100%; }
+  @keyframes flare { 0% { transform: scale(1); } 35% { transform: scale(1.35, 1.6); } 100% { transform: scale(1); } }
+
+  /* Wind: the near sand drifts a little as the page scrolls (driven by --wind from JS). */
+  .night-scene .ns-drift { transform: translateX(calc(var(--wind, 0) * -24px)); transition: transform 160ms linear; will-change: transform; }
+  [dir="ltr"] .night-scene .ns-drift { transform: translateX(calc(var(--wind, 0) * 24px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-planner .mode-tile, .planner-results .mode-tile { transition: none; transform: none; }
+  .mode-tile[data-mode="kashta"]:has(input:checked) .ns-flame { animation: none; }
+  .night-scene .ns-drift { transform: none !important; transition: none; }
+}
+
+@layer components {
+  /* Places: one featured place, then compact rows; the list and the map share numbers. */
+  .place-card[data-rank="first"] { padding: 1.2rem 1.3rem; border-color: color-mix(in srgb, var(--accent, var(--color-ember)) 55%, transparent); box-shadow: 0 22px 40px -30px rgb(11 16 32 / 55%); }
+  .place-card[data-rank="rest"] { padding: 0.75rem 1rem; }
+  .place-card[data-rank="rest"] .place-title { font-weight: 500; }
+  .place-card[data-rank="first"] .place-title { font-size: var(--text-lead); }
+  @media (min-width: 640px) {
+    .places-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .place-card[data-rank="first"] { grid-column: 1 / -1; }
+  }
+  .map-key { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; margin-bottom: 0.6rem; color: var(--color-ink-2); }
+  .map-key-title { flex-basis: 100%; font-weight: 500; color: var(--color-ink); }
+  .map-key-item { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--color-sand-2); }
+  .map-key-dot { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 999px; }
+  .map-key-dot--poor { background: var(--color-ink-2); background-image: linear-gradient(45deg, transparent 42%, var(--color-sand) 42% 58%, transparent 58%); }
+  .map-key-dot--none { border: 2px solid var(--color-ink-2); }
+  .map-key-dot--excluded { border: 2px dashed var(--color-ink-2); }
 }

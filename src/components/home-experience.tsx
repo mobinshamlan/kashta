@@ -1,15 +1,13 @@
 "use client";
 
-import Link from "next/link";
-import { Car, ChevronLeft, ChevronRight, LoaderCircle, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle, MapPin } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlanResponse } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
-import { estimateDrive, getDestination } from "@/lib/destinations";
-import { approxHours, formatNight } from "@/lib/i18n";
+import { getDestination } from "@/lib/destinations";
+import { formatNight } from "@/lib/i18n";
 import { DEFAULT_PREFS, loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import { bestPerNight, nightReasons } from "@/lib/reasons";
-import { rating } from "@/lib/score";
 import type { Experience } from "@/lib/types";
 import { useI18n } from "./locale-provider";
 import { ModeSwitch } from "./mode-switch";
@@ -20,13 +18,13 @@ import { HomePlanner, type PlanStep } from "./home-planner";
 import { ReasonList, RecommendationCard } from "./recommendation-card";
 import { SaduBand } from "./sadu-band";
 import { SevenNights } from "./seven-nights";
-import { ErrorState, RATING_COLOR, Skeleton } from "./ui";
+import { ErrorState, Skeleton } from "./ui";
 
 type Load = { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: PlanResponse };
 
 /**
  * The MVP in one scroll: the answer for the chosen activity, the week, why the night suits it,
- * a few verified places, and a short planner that ends in a plan. /plan keeps the full options.
+ * and a short planner that ends in a plan. /plan keeps the full options.
  */
 export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   const { locale, dict } = useI18n();
@@ -37,6 +35,8 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   // The homepage planner shares this page's mode and night; it adds a place and a step.
   const [planPlace, setPlanPlace] = useState<string | null>(null);
   const [planStep, setPlanStep] = useState<PlanStep>(1);
+  // Until the visitor edits, the planner shows the hero's choices as a summary.
+  const [planEditing, setPlanEditing] = useState(false);
   const started = useRef(new Set<Experience>());
 
   const load = useCallback(async (experience: Experience, force = false) => {
@@ -59,10 +59,19 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     void load(start);
   }, [initialMode, load]);
 
-  const choose = (next: Experience) => {
+  const choose = (next: Experience, from: "hero" | "planner" = "hero") => {
     setMode(next);
     setPicked(null);
     setPlanPlace(null);
+    // From the hero, a new activity means new picks: back to the summary rather than a stale
+    // step 4. From the planner's own tile, stay in the flow and move on to the night.
+    if (from === "hero") {
+      setPlanEditing(false);
+      setPlanStep(1);
+    } else {
+      setPlanEditing(true);
+      setPlanStep(2);
+    }
     savePrefs({ ...loadPrefs(), experience: next });
     // Keep the address shareable: /?mode=stars opens the same view.
     const url = new URL(window.location.href);
@@ -88,23 +97,40 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   };
   const shownDest = shown ? getDestination(shown.slug) : undefined;
   const shownHours = shown ? data?.forecasts[shown.slug]?.metrics.find((m) => m.date === shown.date)?.hours : undefined;
-  const nightRows = data && shownNight
-    ? data.results.filter((r) => r.date === shownNight && r.score !== null).sort((a, b) => b.score! - a.score!).slice(0, 3)
-    : [];
   // Jump into the planner at a step, with the night (and place) already chosen.
   const planFrom = (slug: string | null, step: PlanStep) => {
     if (slug) setPlanPlace(slug);
+    setPlanEditing(true);
     setPlanStep(step);
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     requestAnimationFrame(() => document.getElementById("plan")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }));
   };
   const hero = t.heroByMode[mode];
   const Forward = locale === "ar" ? ChevronLeft : ChevronRight;
+  const heroRef = useRef<HTMLElement>(null);
+
+  // Wind over the dunes: the near sand drifts a little as the hero scrolls out. Pure CSS var,
+  // no layout reads beyond scrollY; disabled when the visitor prefers reduced motion.
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const wind = Math.min(1, Math.max(0, window.scrollY / Math.max(1, el.offsetHeight)));
+        el.style.setProperty("--wind", wind.toFixed(3));
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("scroll", onScroll); };
+  }, []);
 
   return (
     <div data-mode={mode}>
       {/* 1 · The answer: the scene for the chosen activity and its best night. */}
-      <section className="night-hero home-v3 on-night on-dark" aria-labelledby="hero-title">
+      <section ref={heroRef} className="night-hero home-v3 on-night on-dark" aria-labelledby="hero-title">
         <NightScene mode={mode} />
         <div className="frame home-v3-grid">
           <div className="home-v3-main min-w-0">
@@ -205,42 +231,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
 
       <SaduBand />
 
-      {/* 4 · A few verified places for the chosen night. */}
-      {nightRows.length > 0 && (
-        <section className="home-v3-places" aria-labelledby="preview-title">
-          <div className="frame py-[clamp(2.25rem,5vw,3.5rem)]">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-              <h2 id="preview-title" className="sub">{t.previewTitle}</h2>
-              <Link href={`/destinations?mode=${mode}`} className="link small inline-flex min-h-11 items-center">{t.previewAll}</Link>
-            </div>
-            <ul className="mt-5 grid gap-3 md:grid-cols-3">
-              {nightRows.map((r) => {
-                const d = getDestination(r.slug)!;
-                const rt = rating(r.score);
-                return (
-                  <li key={r.slug} className="preview-card">
-                    <div className="flex items-start justify-between gap-3">
-                      <Link href={`/destinations/${r.slug}?night=${r.date}&exp=${mode}`} className="font-medium hover:underline">{d.name[locale]}</Link>
-                      <span className="rating-pill" style={{ ["--rating" as string]: RATING_COLOR[rt] }}>{dict.rating[rt]}</span>
-                    </div>
-                    <ReasonList className="small mt-2" reasons={nightReasons(r, data!.metrics[`${r.slug}|${r.date}`], 1)} />
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <span className="small inline-flex items-center gap-1.5 text-ink-2" title={dict.common.estimateNote}>
-                        <Car aria-hidden size={15} />
-                        <bdi className="num">{approxHours(estimateDrive(d).hours, locale)}</bdi>
-                      </span>
-                      <button type="button" className="btn-quiet !min-h-11" onClick={() => planFrom(r.slug, 4)}>{t.planHere}</button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="small mt-4 flex items-center gap-2 text-ink-2"><MapPin aria-hidden size={15} />{t.scopeNote}</p>
-          </div>
-        </section>
-      )}
-
-      {/* 5 · The planner: activity → night → place → plan, all on this page. */}
+      {/* 4 · The planner: activity → night → place → plan, all on this page. */}
       <section id="plan" className="home-v3-cta" aria-labelledby="plan-title">
         <div className="frame py-[clamp(2.5rem,5vw,4rem)]">
           <h2 id="plan-title" className="sub">{t.ctaTitle[mode]}</h2>
@@ -248,7 +239,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
           <div className="mt-6">
             <HomePlanner
               mode={mode}
-              onMode={choose}
+              onMode={(m) => choose(m, "planner")}
               data={data}
               perNight={nights}
               bestNight={bestNight}
@@ -258,6 +249,8 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
               onPlace={setPlanPlace}
               step={planStep}
               onStep={setPlanStep}
+              summary={!planEditing}
+              onEdit={() => setPlanEditing(true)}
             />
           </div>
         </div>

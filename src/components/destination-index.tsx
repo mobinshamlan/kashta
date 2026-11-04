@@ -14,6 +14,8 @@ import type { Destination, Experience } from "@/lib/types";
 import { CoverageMap } from "./coverage-map";
 import { useI18n } from "./locale-provider";
 import { ModeSwitch } from "./mode-switch";
+import { NightScene } from "./night-scene";
+import { SaduBand } from "./sadu-band";
 import { ErrorState, RATING_COLOR, Skeleton } from "./ui";
 
 type Load = { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: PlanResponse };
@@ -123,23 +125,43 @@ export function DestinationIndex({ initialMode }: { initialMode?: Experience }) 
       return n;
     });
 
+  const order = sorted.map((r) => r.d.slug);
+
   return (
     <div data-mode={mode}>
-      <div className="flex flex-wrap items-end justify-between gap-6">
-        <ModeSwitch tone="sand" value={mode} onChange={choose} legend={dict.home.modeLegend} />
-        <button
-          type="button"
-          className="choice min-h-11"
-          aria-pressed={farther}
-          onClick={() => { setFarther((v) => !v); setShowAll(false); }}
-          style={farther ? { background: "var(--color-olive)", color: "var(--color-sand)" } : undefined}
-        >
-          {ar ? "ضمّن الأبعد (حتى 5 ساعات تقريبًا)" : "Include farther places (up to ~5 h)"}
-        </button>
-      </div>
+      {/* The same night as the homepage: the mode decides the scene, the title sits on it. */}
+      <section className="places-hero night-hero on-night on-dark" aria-labelledby="places-title">
+        <NightScene mode={mode} />
+        <div className="frame places-hero-inner">
+          <h1 id="places-title" className="places-title">{dict.destinations.title}</h1>
+          <p className="muted mt-2 max-w-[48ch]">{dict.home.scopeNote}</p>
+          <div className="mt-6 flex flex-wrap items-end gap-x-6 gap-y-4">
+            <ModeSwitch value={mode} onChange={choose} legend={dict.home.modeLegend} />
+            <button
+              type="button"
+              className="places-toggle"
+              aria-pressed={farther}
+              onClick={() => { setFarther((v) => !v); setShowAll(false); }}
+            >
+              {ar ? "ضمّن الأبعد (حتى 5 ساعات تقريبًا)" : "Include farther places (up to ~5 h)"}
+            </button>
+            <button
+              type="button"
+              className="places-toggle lg:hidden"
+              aria-expanded={mapOpen}
+              aria-controls="places-map"
+              onClick={() => { setMapOpen((v) => !v); if (!mapOpen) requestAnimationFrame(() => document.getElementById("places-map")?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })); }}
+            >
+              <MapIcon aria-hidden size={16} />
+              {mapOpen ? (ar ? "أخفِ الخريطة" : "Hide map") : ar ? "على الخريطة" : "Show on map"}
+            </button>
+          </div>
+        </div>
+      </section>
+      <SaduBand />
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-12">
-        <section aria-label={ar ? "الأماكن" : "Places"} aria-live="polite" aria-busy={state.s === "loading"} className="min-w-0">
+      <div className="frame grid gap-8 pb-14 pt-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-12">
+        <section aria-label={ar ? "قائمة الأماكن" : "List of places"} aria-live="polite" aria-busy={state.s === "loading"} className="min-w-0">
           {state.s === "loading" && (
             <div className="grid gap-3 md:grid-cols-2" aria-hidden>
               {Array.from({ length: SHORT_LIST }, (_, i) => <Skeleton key={i} className="h-40 !rounded-xl" />)}
@@ -150,17 +172,21 @@ export function DestinationIndex({ initialMode }: { initialMode?: Experience }) 
 
           {data && rows.length > 0 && (
             <>
-              <ol className="grid gap-3 md:grid-cols-2">
+              <ol className="places-list grid gap-3">
                 {rows.map((r) => {
                   const reason = r.best ? nightReasons(r.best, r.m, 1) : [];
                   const rt = rating(r.best?.score ?? null);
                   const isOpen = open.has(r.d.slug);
                   const detailsId = `place-more-${r.d.slug}`;
                   const PermitIcon = r.d.permit.status === "permit_required" || r.d.permit.status === "verified_permitted" ? ShieldCheck : ShieldAlert;
+                  const n = order.indexOf(r.d.slug) + 1;
                   return (
-                    <li key={r.d.slug} className="flex flex-col rounded-xl border border-ink/15 bg-sand p-4">
+                    <li key={r.d.slug} className="place-card" data-rank={n === 1 ? "first" : "rest"}>
                       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                        <Link href={href(r)} className="link inline-flex min-h-11 items-center font-medium">{r.d.name[locale]}</Link>
+                        <span className="flex min-w-0 items-center gap-2.5">
+                          <span className="place-num num" aria-hidden style={r.best ? { background: RATING_COLOR[rt], borderColor: "transparent", color: "#fff" } : undefined}>{n}</span>
+                          <Link href={href(r)} className="place-title inline-flex min-h-11 items-center font-semibold hover:underline">{r.d.name[locale]}</Link>
+                        </span>
                         <span
                           className="small shrink-0 rounded-full px-2.5 py-0.5 font-medium"
                           style={r.best ? { background: RATING_COLOR[rt], color: "#fff" } : { border: "1px solid var(--color-ink-2)", color: "var(--color-ink-2)" }}
@@ -172,7 +198,7 @@ export function DestinationIndex({ initialMode }: { initialMode?: Experience }) 
                       {r.best && reason[0] ? (
                         <p className="mt-2 flex items-center gap-2">
                           <ReasonIcon reason={reason[0]} />
-                          <span>{reasonHead(reason[0])}</span>
+                          <span>{reasonHead(reason[0])}<span className="text-ink-2"> — <bdi className="num">{dict.reasons.detail[reason[0].factor](reason[0].values)}</bdi></span></span>
                         </p>
                       ) : !r.best ? (
                         <p className="small mt-2 text-ink-2">{noWeek}</p>
@@ -260,19 +286,10 @@ export function DestinationIndex({ initialMode }: { initialMode?: Experience }) 
         </section>
 
         <div className="min-w-0 lg:sticky lg:top-24 lg:self-start">
-          <button
-            type="button"
-            className="btn-quiet w-full justify-center lg:hidden"
-            aria-expanded={mapOpen}
-            aria-controls="places-map"
-            onClick={() => setMapOpen((v) => !v)}
-          >
-            <MapIcon aria-hidden size={17} />
-            {mapOpen ? (ar ? "أخفِ الخريطة" : "Hide map") : ar ? "على الخريطة" : "Show on map"}
-          </button>
           {/* One map: always shown on large screens, opened on request on small ones. */}
-          <div id="places-map" className={`${mapOpen ? "mt-4 block" : "hidden"} lg:mt-0 lg:block`}>
-            <CoverageMap legendText={ar ? "لون النقطة = أنسب ليلة للمكان هالأسبوع" : "Dot colour = the place's best night this week"} compact legend={false} scores={data ? bestScores : undefined} pick={topSlug} mode={mode} />
+          <div id="places-map" className={`${mapOpen ? "block" : "hidden"} scroll-mt-20 lg:block`}>
+            <p className="small mb-2 font-medium">{ar ? "الأرقام نفسها في القائمة والخريطة" : "Same numbers on the list and the map"}</p>
+            <CoverageMap legendText={ar ? "اللون = أنسب ليلة للمكان هالأسبوع" : "Colour = the place's best night this week"} compact legend={false} scores={data ? bestScores : undefined} pick={topSlug} mode={mode} numbered={order} />
           </div>
         </div>
       </div>
