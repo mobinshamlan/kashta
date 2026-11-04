@@ -84,7 +84,11 @@ export function answerFacts(plan: NonNullable<Awaited<ReturnType<typeof scorePla
       dealbreakers: chosen.dealbreakers,
       otherForecastDetails: rounded,
     },
-    whyThisPlace: { mainReasons: reasons, rankedFirstWithinDriveLimitThatNight: true },
+    whyThisPlace: {
+      mainReasons: reasons,
+      rankedFirstWithinDriveLimitThatNight: !sameNight.some((s) => s.score! > (chosen.score ?? -1)),
+      scoredHigherThatNight: sameNight.filter((s) => s.score! > (chosen.score ?? -1)).map((s) => name(s.slug)),
+    },
     howKashtaChooses: "Every place within the drive limit is scored per night from the forecast (temperature, wind, rain, dust, clouds and, for stargazing, moonlight), weighted by the group's preferences. The highest score is recommended.",
     otherPlacesSameNight: sameNight.map((s) => ({ name: name(s.slug), kashtaScore: s.score })),
     packingChecklist: { keyItems: keyItems.map((i) => i.label[locale]), totalItemsInPlan: checklist.length },
