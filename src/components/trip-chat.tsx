@@ -220,10 +220,10 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
         <div ref={logRef} className="trip-chat-log" role="log" aria-live="polite" aria-relevant="additions" aria-label={t.title} tabIndex={0}>
           <div className="chat-msg chat-msg--bot"><p>{t.hello}</p></div>
           {msgs.map((m) => (m.from === "user" ? (
-            <div key={m.id} className="chat-msg chat-msg--user"><p>{m.text}</p></div>
+            <div key={m.id} className="chat-msg chat-msg--user"><p dir="auto">{m.text}</p></div>
           ) : (
             <div key={m.id} className="chat-msg chat-msg--bot">
-              {m.kind === "text" && <><p>{m.text}</p>{m.notes?.map((n) => <p key={n} className="small muted mt-1">{n}</p>)}</>}
+              {m.kind === "text" && <><p dir="auto">{m.text}</p>{m.notes?.map((n) => <p key={n} className="small muted mt-1">{n}</p>)}</>}
               {m.kind === "answer" && <AnswerMsg text={m.text} slug={m.slug} date={m.date} plan={data} />}
               {m.kind === "set" && (
                 <>
@@ -353,7 +353,7 @@ function AnswerMsg({ text, slug, date, plan }: { text: string | null; slug?: str
   const { locale, dict } = useI18n();
   const t = dict.home.chat;
   const row = slug && date ? plan?.results.find((r) => r.slug === slug && r.date === date) : undefined;
-  if (text) return <p lang={/[\u0600-\u06FF]/u.test(text) ? "ar" : "en"}>{text}</p>;
+  if (text) return <p dir="auto" lang={/[\u0600-\u06FF]/u.test(text) ? "ar" : "en"}>{text}</p>;
   return (
     <div lang={locale}>
       <p>{row ? t.answerFallback(getDestination(row.slug)?.name[locale] ?? "") : t.answerNoPlan}</p>
