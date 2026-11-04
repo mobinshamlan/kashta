@@ -247,7 +247,10 @@ export function PlacesMap({
         <span><i style={{ background: "var(--map-fair)" }} />{dict.rating.fair}</span>
         <span><i style={{ background: "var(--map-poor)" }} />{dict.rating.poor}</span>
         <span><i className="pm-key-none" />{ar ? "بدون تقييم" : "No score"}</span>
-        <span className="pm-key-note">{note ? `${note} ` : ""}{ar ? "نقاط الدخول المنشورة، بدون طرق مرسومة." : "Published entry points; no roads drawn."}</span>
+        <details className="pm-key-details">
+          <summary>{dict.map.details}</summary>
+          <p>{note ?? dict.map.note}</p>
+        </details>
       </figcaption>
     </figure>
   );

@@ -8,11 +8,9 @@ import { buildChecklist } from "@/lib/checklist";
 import { estimateDrive, getDestination } from "@/lib/destinations";
 import { approxHours, formatNight } from "@/lib/i18n";
 import { DEFAULT_PREFS } from "@/lib/prefs-storage";
-import { nightReasons } from "@/lib/reasons";
 import { rating } from "@/lib/score";
 import type { Experience } from "@/lib/types";
 import { useI18n } from "./locale-provider";
-import { ReasonList } from "./recommendation-card";
 import { RATING_COLOR } from "./ui";
 
 /** Same key as the place page's checklist, so ticks made here are still ticked there. */
@@ -112,17 +110,15 @@ export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver,
     <div className="plan-done plan-step-in grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-10">
       <div className="min-w-0">
         <article className="rec-card on-night plan-result" data-mode={mode} aria-labelledby="plan-place">
-          <p className="rec-kicker small"><ModeIcon aria-hidden size={16} />{dict.experience[mode]} · {formatNight(row.date, locale)}</p>
+          <p className="plan-result-state small"><Check aria-hidden size={15} />{t.journeyEnd}<span className="rec-kicker">{ModeIcon && <ModeIcon aria-hidden size={15} />}{dict.experience[mode]} · {formatNight(row.date, locale)}</span></p>
           <div className="mt-2 flex items-start justify-between gap-4">
             <h3 id="plan-place" className="rec-place">{d.name[locale]}</h3>
             <span className="rec-rating" style={{ ["--rating" as string]: RATING_COLOR[rt] }}>{dict.rating[rt]}</span>
           </div>
-          <ReasonList className="mt-4" reasons={nightReasons(row, data.metrics[`${row.slug}|${row.date}`], 1)} />
           <ul className="rec-divider small mt-5 grid gap-2 pt-4">
             <li className="flex items-center gap-2" title={dict.common.estimateNote}>
               <Car aria-hidden size={16} />
               <bdi className="num">{approxHours(drive.hours, locale)}</bdi>
-              <span className="muted">({t.estimate})</span>
             </li>
             <li className="flex flex-wrap items-center gap-x-2">
               <PermitIcon aria-hidden size={16} />
@@ -191,10 +187,9 @@ export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver,
  * The plan before a place is used: the current choice shown as a suggestion (or as the visitor's
  * pick, if they picked it), never as a finished plan. One action makes it the plan.
  */
-export function PlanSuggestion({ mode, row, data, picked, onUse, onChange }: {
+export function PlanSuggestion({ mode, row, picked, onUse, onChange }: {
   mode: Experience;
   row: ScoreRow;
-  data: PlanResponse;
   /** The visitor picked this place on the map or list (vs. our suggestion). */
   picked: boolean;
   onUse: () => void;
@@ -203,10 +198,7 @@ export function PlanSuggestion({ mode, row, data, picked, onUse, onChange }: {
   const { locale, dict } = useI18n();
   const t = dict.home;
   const d = getDestination(row.slug)!;
-  const rt = rating(row.score);
   const ModeIcon = mode === "kashta" ? Flame : Sparkles;
-  const permitOk = d.permit.status === "permit_required" || d.permit.status === "verified_permitted";
-  const PermitIcon = permitOk ? ShieldCheck : ShieldAlert;
   return (
     <article className="rec-card on-night plan-suggest" data-mode={mode} aria-labelledby="suggest-place">
       <div className="plan-suggest-body">
@@ -215,15 +207,7 @@ export function PlanSuggestion({ mode, row, data, picked, onUse, onChange }: {
             <span className="plan-suggest-tag">{picked ? t.yourPick : t.ourSuggestion}</span>
             <span className="rec-kicker small"><ModeIcon aria-hidden size={15} />{dict.experience[mode]} · {formatNight(row.date, locale, { short: true })}</span>
           </p>
-          <div className="mt-2 flex items-start gap-3">
-            <h3 id="suggest-place" className="rec-place">{d.name[locale]}</h3>
-            <span className="rec-rating mt-1.5" style={{ ["--rating" as string]: RATING_COLOR[rt] }}>{dict.rating[rt]}</span>
-          </div>
-          <ReasonList className="mt-3" reasons={nightReasons(row, data.metrics[`${row.slug}|${row.date}`], 1)} />
-          <p className="place-panel-facts small mt-3">
-            <span title={dict.common.estimateNote}><Car aria-hidden size={15} /><bdi className="num">{approxHours(estimateDrive(d).hours, locale)}</bdi> <span className="muted">({t.estimate})</span></span>
-            <span><PermitIcon aria-hidden size={15} />{dict.permit.short[d.permit.status]}</span>
-          </p>
+          <h3 id="suggest-place" className="rec-place mt-2">{d.name[locale]}</h3>
         </div>
         <div className="plan-suggest-actions">
           <button type="button" className="btn btn-accent" onClick={onUse}>{t.usePlan}</button>

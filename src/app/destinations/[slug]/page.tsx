@@ -63,9 +63,16 @@ export default async function DestinationPage({ params, searchParams }: PageProp
               </li>
               <li>
                 <span className="small muted block">{dict.permit.title}</span>
-                <a href="#permit-heading" className="inline-flex min-h-11 items-center"><PermitBadge status={d.permit.status} label={dict.permit.short[d.permit.status]} /></a>
+                <span className="inline-flex min-h-11 items-center"><PermitBadge status={d.permit.status} label={dict.permit.short[d.permit.status]} /></span>
               </li>
             </ul>
+            {/* The one action that can block the outing, where it's seen first; its source is in the details below. */}
+            {d.permit.applyUrl && (
+              <a href={d.permit.applyUrl} target="_blank" rel="noopener" className="btn btn-accent mt-5">
+                {dict.permit.apply}
+                <ExternalLink aria-hidden size={16} />
+              </a>
+            )}
             {d.permit.status === "unverified" && <p role="note" className="small mt-4 max-w-[52ch] rounded-lg bg-white/10 p-3">{dict.permit.excluded}</p>}
           </div>
           <figure className="place-intro-photo">
@@ -84,10 +91,6 @@ export default async function DestinationPage({ params, searchParams }: PageProp
             <DestinationForecast slug={d.slug} lat={d.lat} lon={d.lon} initialNight={night} initialExperience={exp} initialTune={carried.size ? { ...tune, ...(Number.isInteger(group) && group >= 1 && group <= 40 ? { groupSize: group } : {}) } : undefined} />
           </div>
         </section>
-
-        <div className="pb-10">
-          <PermitPanel permit={d.permit} dict={dict} locale={locale} />
-        </div>
 
         {/* Everything else is reference: open it on purpose. */}
         <details className="place-more mb-16">
@@ -128,6 +131,7 @@ export default async function DestinationPage({ params, searchParams }: PageProp
               <ul className="mt-3 flex list-disc flex-col gap-2 ps-5">
                 {d.facts[locale].map((f) => <li key={f}>{f}</li>)}
               </ul>
+              <div className="mt-8"><PermitPanel permit={d.permit} dict={dict} locale={locale} variant="quiet" /></div>
               <h3 className="mt-8 font-medium">{dict.common.sources}</h3>
               <ul className="mt-3 flex flex-col gap-2">
                 {d.sources.map((src) => (

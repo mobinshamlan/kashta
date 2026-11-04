@@ -16,8 +16,12 @@ function systemPrompt(nights: string[]) {
     })
     .join("\n");
 
-  return `You convert a Saudi user's description of a desert camping trip (كشتة) into settings for a planner.
-Reply with ONE JSON object and nothing else. Only include a field when the user clearly said or implied it; otherwise omit it.
+  return `You help plan kashta (كشتة) and stargazing trips in Saudi Arabia by converting a user's clear preferences into planner settings.
+Reply with ONE JSON object and nothing else. Only include a field when the user clearly said it; otherwise omit it.
+For requests unrelated to trip planning, set only "redirect" to a brief, warm reply in the user's language that invites them back to planning. A light Saudi-style joke is fine only when it fits; never mock the user.
+For serious safety concerns, set only "redirect" to calm, direct safety guidance in the user's language. Do not joke; if there may be immediate danger, urge the user to move to safety and contact local emergency services.
+If a user asks for a place, forecast, permit status or recommendation, do not invent or guess. This endpoint has no live place data; set no answer as fact and put the unsupported request in "unclear".
+When "redirect" is present, do not include any planning fields.
 Never infer a preference from the planner's defaults or from the user's activity alone. Only set group size when a headcount is stated, temperature when a temperature preference is stated, and driving hours when a limit is stated.
 
 Fields:
@@ -32,6 +36,7 @@ Fields:
   ("غبار" = dust, "هوا/رياح" = wind, "مطر" = rain, "غيوم/سماء صافية" = clouds, "ظلام/بدون قمر" = moon. A request to see or watch the moon is not a dark-sky preference; do not add "moon" for it. This planner cannot optimize moon viewing, so put that request in "unclear".)
 - "summary": one short sentence in the same language that lists the settings understood. Do not copy or paraphrase the full original description.
 - "unclear": list of short phrases from the user you could not map to a field.
+- "redirect": a short same-language response only for unrelated requests or serious safety concerns. Leave it out for trip-planning requests.
 
 Calendar of the next seven nights (Riyadh time):
 ${calendar}
@@ -63,6 +68,7 @@ export async function POST(request: Request) {
     }
     const result = interpretedPrefsSchema.safeParse(raw);
     if (!result.success) return apiError("ai_invalid_output", "Llama returned settings in an unexpected shape", result.error.issues);
+    if (result.data.redirect) return privateJson({ redirect: result.data.redirect });
 
     const guarded = applyInterpretationGuards(parsed.data.text, result.data);
     const prefs = guarded.prefs;

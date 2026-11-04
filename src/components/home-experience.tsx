@@ -277,6 +277,11 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     { n: 3, label: dict.plan.steps.place, value: chosenDest?.name[locale], reachable: !!chosen },
     { n: 4, label: dict.plan.steps.plan, reachable: !!chosen },
   ];
+  const updatedAt = data?.forecastFetchedAt ? new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Riyadh",
+  }).format(new Date(data.forecastFetchedAt)) : null;
 
   return (
     <div className="home-journey" data-mode={mode} data-step={step}>
@@ -335,7 +340,12 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
         <div id="week" className="home-v5-week" aria-labelledby="week-title">
           <div className="frame home-v5-week-grid">
             <div className="min-w-0">
-              <h2 id="week-title" className="home-h2 home-h2--sm" tabIndex={-1} data-step-focus>{t.weekShort}</h2>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <h2 id="week-title" className="home-h2 home-h2--sm" tabIndex={-1} data-step-focus>{t.weekShort}</h2>
+                {updatedAt && data?.forecastFetchedAt && (
+                  <p className="small text-star-2">{dict.common.updated} <time className="num" dateTime={data.forecastFetchedAt}>{updatedAt}</time></p>
+                )}
+              </div>
               <div className="mt-3">
                 {data ? (
                   <SevenNights compact nights={nights} metricsFor={(n) => { const r = nights.find((x) => x.night === n)?.best; return r ? data.metrics[`${r.slug}|${n}`] : undefined; }} selected={night} bestNight={bestNight} onSelect={chooseNight} />
@@ -360,7 +370,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
         <section id="places" className="home-v4-places on-night on-dark" aria-labelledby="places-title">
           <div className="frame pb-12 pt-8">
             {data && night && chosen ? (
-              <HomePlaces carry={carry} mode={mode} data={data} night={night} ranked={ranked} selected={chosen.slug} onSelect={choosePlace} onNight={(n) => { if (chosen) setPlace(chosen.slug); chooseNight(n, true); }} onPlan={() => advance(4)} />
+              <HomePlaces carry={carry} mode={mode} data={data} night={night} ranked={ranked} selected={chosen.slug} onSelect={choosePlace} onPlan={() => advance(4)} />
             ) : (
               <h2 id="places-title" className="home-h2" tabIndex={-1} data-step-focus>{t.placesHeading}</h2>
             )}
@@ -368,7 +378,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
         </section>
 
         {/* 4 · The plan, at first light. Until a place is used, it shows the suggestion, clearly labelled. */}
-        <section id="plan" className="home-v4-plan" aria-labelledby="plan-title">
+        <section id="plan" className="home-v4-plan on-night on-dark" aria-labelledby="plan-title">
           <div className="frame pb-[clamp(2.5rem,5vw,4rem)]">
             <h2 id="plan-title" className="home-h2" tabIndex={-1} data-step-focus>{t.summaryTitle}</h2>
             {linkNote && <p role="status" className="plan-note small mt-3">{t.linkChanged}</p>}
@@ -376,19 +386,15 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
               {data && chosen && step === 4 ? (
                 <HomePlan carry={carry} key={`${chosen.slug}-${chosen.date}`} mode={mode} row={chosen} data={data} groupSize={groupSize} onGroupSize={changeGroup} onStartOver={startOver} onChangePlace={() => scrollTo(3)} onExplain={() => setExplainSignal((n) => n + 1)} />
               ) : data && chosen ? (
-                <PlanSuggestion mode={mode} row={chosen} data={data} picked={!!place && place === chosen.slug && chosen.slug !== ranked[0]?.slug} onUse={() => advance(4)} onChange={() => scrollTo(3)} />
-              ) : null}
+                <PlanSuggestion mode={mode} row={chosen} picked={!!place && place === chosen.slug && chosen.slug !== ranked[0]?.slug} onUse={() => advance(4)} onChange={() => scrollTo(3)} />
+              ) : (
+                <div className="plan-pending" role="status" aria-busy={state.s === "loading"}>
+                  {state.s === "loading" ? (
+                    <p className="small flex items-center gap-2"><LoaderCircle aria-hidden size={16} className="animate-spin" />{dict.common.loading}</p>
+                  ) : <p>{state.s === "error" || data ? t.planUnavailable : t.planPending}</p>}
+                </div>
+              )}
             </div>
-            {data?.forecastFetchedAt && (
-              <p className="small mt-10 text-ink-2">
-                {dict.common.forecastBy} · {dict.common.updated}{" "}
-                <time className="num" dateTime={data.forecastFetchedAt}>
-                  {new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Riyadh" }).format(new Date(data.forecastFetchedAt))}
-                </time>
-                {!data.airQuality.available && <> · {dict.plan.airDown}</>}
-                {" · "}{t.illustration}
-              </p>
-            )}
           </div>
         </section>
         </div>

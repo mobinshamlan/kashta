@@ -33,9 +33,6 @@ export function ModeSwitch({
           </label>
         ))}
       </div>
-      <p className={`small mt-2 ${tone === "sand" ? "text-ink-2" : "muted"}`}>
-        {value === "kashta" ? dict.experience.kashtaDesc : dict.experience.starsDesc}
-      </p>
     </fieldset>
   );
 }

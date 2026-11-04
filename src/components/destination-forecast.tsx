@@ -216,7 +216,7 @@ export function DestinationForecast({
             {dict.detail.hourly}
           </h2>
           <p className="small mb-4 text-ink-2">
-            {dict.common.forecastBy} · {dict.common.updated}{" "}
+            {dict.common.updated}{" "}
             <time className="num" dateTime={data.fetchedAt}>
               {new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", {
                 hour: "2-digit",

@@ -1585,7 +1585,6 @@
   .trip-chat-form textarea:focus-visible { outline: 3px solid var(--color-star); outline-offset: 1px; }
   .trip-chat-send { display: grid; place-items: center; flex: none; width: 2.75rem; height: 2.75rem; border-radius: 12px; background: var(--accent); color: var(--color-sky); }
   .trip-chat-send:disabled { opacity: 0.45; }
-  .trip-chat-limit { margin-top: 0.5rem; }
   .trip-chat :focus-visible { outline-color: var(--color-star); }
 
   /* Wide screens: a persistent column, sticky under the header, as tall as the screen allows. */
@@ -1597,6 +1596,7 @@
   /* Smaller screens: a dock pinned to the bottom while the trail is on screen; it opens as a sheet. */
   @media (max-width: 1199px) {
     .trip-chat { position: sticky; bottom: 0; z-index: 30; padding: 0.5rem clamp(0.75rem, 3vw, 1.5rem) calc(0.5rem + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgb(8 11 22 / 85%) 40%); }
+    .home-trail-main { padding-block-end: 5.5rem; }
     .trip-chat-dock { display: flex; width: 100%; align-items: center; gap: 0.75rem; min-height: 3.5rem; padding: 0.5rem 0.9rem; border-radius: 16px; background: var(--chat-bg); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 70%); color: var(--color-star); }
     .trip-chat-panel { display: none; }
     .trip-chat[data-open="true"] .trip-chat-dock { display: none; }
@@ -1628,4 +1628,40 @@
 @layer components {
   /* Wide screens show the chat beside the plan, with its own "explain" action. */
   @media (min-width: 1200px) { .plan-explain { display: none; } }
+}
+
+/* ——— Revision 11: carry the night through the plan; keep examples compact ——— */
+@layer components {
+  .home-v4-plan { background: var(--color-sky); }
+  .home-v4-plan > .frame { padding-top: clamp(2rem, 4vw, 3rem); }
+  .home-v4-plan .text-ink-2 { color: var(--color-star-2); }
+  .plan-pending {
+    display: flex; min-height: 6rem; align-items: center; max-width: 52rem;
+    padding: 1.25rem 1.4rem; color: var(--color-star);
+    border: 1px dashed rgb(255 255 255 / 22%); background: rgb(255 255 255 / 4%);
+  }
+  .plan-done { align-items: start; }
+  .plan-result { padding: clamp(1.25rem, 3vw, 1.75rem); border: 1px solid rgb(255 255 255 / 11%); }
+  .plan-done .before-go {
+    padding: 1.1rem 1.2rem; color: var(--color-star);
+    background: rgb(255 255 255 / 5%); border-color: rgb(255 255 255 / 12%);
+  }
+  .plan-done .before-go-list li + li { border-color: rgb(255 255 255 / 10%); }
+  .plan-done .before-go-box { border-color: var(--color-star-2); }
+  .plan-done .before-go-item input:checked ~ span:last-child { color: var(--color-star-2); }
+  .plan-done .before-go-item input:focus-visible + .before-go-box { outline-color: var(--color-star); }
+  .plan-done .group-step button { color: var(--color-star); border-color: rgb(255 255 255 / 24%); }
+  .plan-done .group-step button:hover:not(:disabled) { background: rgb(255 255 255 / 8%); }
+  .plan-note { color: var(--color-star); background: rgb(232 160 122 / 10%); }
+
+  .trip-chat-log { min-height: 5rem; }
+  .chat-msg { animation-duration: 180ms; }
+  .trip-chat-examples { gap: 0.35rem; }
+  .chat-example { min-height: 2.55rem; padding: 0.4rem 0.65rem; font-size: 0.82rem; line-height: 1.4; border-radius: 10px; }
+  @media (max-width: 1199px) {
+    .trip-chat[data-open="true"] .trip-chat-panel { max-height: min(82svh, 44rem); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chat-msg { animation: none; }
+  }
 }
