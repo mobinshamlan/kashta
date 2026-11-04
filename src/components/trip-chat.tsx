@@ -20,7 +20,7 @@ type ExplainData = { explanation: Omit<Explanation, "summary"> & { summary: stri
 type Msg =
   | { id: number; from: "user"; text: string }
   | { id: number; from: "bot"; kind: "text"; text: string; notes?: string[] }
-  | { id: number; from: "bot"; kind: "answer"; text: string | null; slug?: string; date?: string }
+  | { id: number; from: "bot"; kind: "answer"; text: string | null; why?: boolean; slug?: string; date?: string }
   | { id: number; from: "bot"; kind: "set"; changed: string[]; notes: string[] }
   | { id: number; from: "bot"; kind: "result"; slug: string; date: string; key: string }
   | { id: number; from: "bot"; kind: "explain"; slug: string; date: string; data: ExplainData }
@@ -97,12 +97,12 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     setBusy("interpret");
     // The plan on screen goes along, so a question is answered from it (the server recomputes the numbers).
     const context = chosen ? { slug: chosen.slug, date: chosen.date, prefs: { ...prefs, date: chosen.date } } : null;
-    const res = await callApi<{ prefs?: InterpretedPrefs; unsupported?: string[]; redirect?: string; answer?: string | null }>("/api/ai/interpret", { method: "POST", body: JSON.stringify({ text: msg, locale, context }) });
+    const res = await callApi<{ prefs?: InterpretedPrefs; unsupported?: string[]; redirect?: string; answer?: string | null; why?: boolean }>("/api/ai/interpret", { method: "POST", body: JSON.stringify({ text: msg, locale, context }) });
     setBusy(null);
     if (!res.ok) return push({ from: "bot", kind: "error", code: res.code, retry: msg });
     if (res.data.redirect) return push({ from: "bot", kind: "text", text: res.data.redirect });
     // A question is answered and nothing in the plan changes.
-    if ("answer" in res.data) return push({ from: "bot", kind: "answer", text: res.data.answer ?? null, slug: chosen?.slug, date: chosen?.date });
+    if ("answer" in res.data) return push({ from: "bot", kind: "answer", text: res.data.answer ?? null, why: res.data.why, slug: chosen?.slug, date: chosen?.date });
     const got = res.data.prefs;
     if (!got) return push({ from: "bot", kind: "text", text: t.nothingChanged });
     const changed: string[] = [];
@@ -224,7 +224,7 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
           ) : (
             <div key={m.id} className="chat-msg chat-msg--bot">
               {m.kind === "text" && <><p dir="auto">{m.text}</p>{m.notes?.map((n) => <p key={n} className="small muted mt-1">{n}</p>)}</>}
-              {m.kind === "answer" && <AnswerMsg text={m.text} slug={m.slug} date={m.date} plan={data} />}
+              {m.kind === "answer" && <AnswerMsg text={m.text} why={m.why} slug={m.slug} date={m.date} plan={data} />}
               {m.kind === "set" && (
                 <>
                   <p className="font-medium">{t.changed}</p>
@@ -349,14 +349,14 @@ function ExplainMsg({ slug, date, data, plan }: { slug: string; date: string; da
 }
 
 /** A grounded answer; if the model's reply didn't pass the checks, the app's own reasons stand in. */
-function AnswerMsg({ text, slug, date, plan }: { text: string | null; slug?: string; date?: string; plan: PlanResponse | null }) {
+function AnswerMsg({ text, why, slug, date, plan }: { text: string | null; why?: boolean; slug?: string; date?: string; plan: PlanResponse | null }) {
   const { locale, dict } = useI18n();
   const t = dict.home.chat;
   const row = slug && date ? plan?.results.find((r) => r.slug === slug && r.date === date) : undefined;
   if (text) return <p dir="auto" lang={/[\u0600-\u06FF]/u.test(text) ? "ar" : "en"}>{text}</p>;
   return (
     <div lang={locale}>
-      <p>{row ? t.answerFallback(getDestination(row.slug)?.name[locale] ?? "") : t.answerNoPlan}</p>
+      <p>{row ? (why ? t.whyPicked : t.answerFallback)(getDestination(row.slug)?.name[locale] ?? "", formatNight(row.date, locale, { short: true })) : t.answerNoPlan}</p>
       {row && plan && <ReasonList className="small mt-1.5" reasons={nightReasons(row, plan.metrics[`${row.slug}|${row.date}`], 3)} />}
     </div>
   );
