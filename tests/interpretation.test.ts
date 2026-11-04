@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyInterpretationGuards, extractGroupSize } from "../src/lib/interpretation";
+import { applyInterpretationGuards, chatIntent, extractGroupSize } from "../src/lib/interpretation";
 import type { InterpretedPrefs } from "../src/lib/schemas";
 
 const parsed: InterpretedPrefs = {
@@ -91,4 +91,14 @@ test("headcount is read from digits and common spellings", () => {
   assert.equal(extractGroupSize("٣ اشخاص"), 3);
   assert.equal(extractGroupSize("حنا تسعة"), 9);
   assert.equal(extractGroupSize("نبي نكشت الخميس"), null);
+});
+
+test("questions about the plan are answered, never applied or redirected", () => {
+  assert.equal(chatIntent("ليش اخترت المكان ذا؟", { redirect: "أنا أساعد في تخطيط الطلعات بس" }), "question");
+  assert.equal(chatIntent("وش يعني الغيم 0٪؟", {}), "question");
+  assert.equal(chatIntent("وش أحتاج آخذ معي للكشتة؟", {}), "question");
+  assert.equal(chatIntent("Why did you pick this place?", {}), "question");
+  assert.equal(chatIntent("Is the permit needed here", { redirect: "I only plan trips." }), "question");
+  assert.equal(chatIntent("Tell me a joke", { redirect: "Ha! Let's plan a night out instead." }), "redirect");
+  assert.equal(chatIntent("نبيها ليلة الجمعة، وحنا ستة", {}), "change");
 });

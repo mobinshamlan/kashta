@@ -1,39 +1,9 @@
 import { hasInternalKey, collectNumbers, extractJson, keepGrounded } from "@/lib/ai-guards";
-import { DESTINATIONS, estimateDrive, getDestination, isRecommendable } from "@/lib/destinations";
+import { DESTINATIONS, estimateDrive, getDestination } from "@/lib/destinations";
 import { apiError, fromException, privateJson, rateLimited, readJson } from "@/lib/http";
 import { chatLlama, llamaConfig } from "@/lib/llm";
-import { eligibleDestinations, scoreDestinations } from "@/lib/planner";
+import { factsFor, scorePlan } from "@/lib/plan-facts";
 import { explainRequestSchema, explanationSchema } from "@/lib/schemas";
-import type { NightScore } from "@/lib/types";
-
-function factsFor(s: NightScore) {
-  const m = s.metrics;
-  return {
-    date: s.date,
-    kashtaScore: s.score,
-    assessment: s.assessment,
-    missingData: s.missing,
-    dealbreakers: s.dealbreakers,
-    factorScores: Object.fromEntries(s.factors.map((f) => [f.factor, f.score])),
-    forecast: {
-      eveningTempC: m.eveningTemp,
-      lowestTempC: m.minTemp,
-      lowestFeelsLikeC: m.minFeels,
-      maxWindKmh: m.maxWind,
-      maxGustKmh: m.maxGust,
-      maxRainChancePct: m.maxPrecipProb,
-      totalRainMm: m.totalPrecip,
-      meanNightCloudPct: m.meanCloud,
-      maxSurfaceDustUgm3: m.maxDust,
-      sunset: m.sunset,
-      astronomicalDusk: m.duskAstro,
-      astronomicalDawn: m.dawnAstro,
-      moonIlluminationPct: Math.round(m.moonIllumination * 100),
-      moonFreeDarkHours: m.moonFreeDarkHours,
-      darkHours: m.darkHours,
-    },
-  };
-}
 
 export async function POST(request: Request) {
   if (rateLimited(request)) return apiError("too_many_requests", "Too many AI requests, try again in a minute");
@@ -46,18 +16,9 @@ export async function POST(request: Request) {
   if (!dest) return apiError("not_found", "Unknown destination");
 
   try {
-    // Recompute on the server: numbers sent by the browser are never trusted.
-    const { considered } = eligibleDestinations({ ...prefs, maxDriveHours: 6 });
-    const pool = considered.some((d) => d.slug === slug) ? considered : [...considered, dest];
-    const { scores } = await scoreDestinations({ ...prefs, date: "flexible" }, pool);
-    const chosen = scores.find((s) => s.slug === slug && s.date === date);
-    if (!chosen) return apiError("invalid_input", "That night is outside the seven-day forecast");
-
-    const alternatives = scores
-      .filter((s) => s.score !== null && !(s.slug === slug && s.date === date))
-      .filter((s) => isRecommendable(getDestination(s.slug)!))
-      .filter((s) => estimateDrive(getDestination(s.slug)!).hours <= prefs.maxDriveHours)
-      .slice(0, 3);
+    const plan = await scorePlan(slug, date, prefs);
+    if (!plan) return apiError("invalid_input", "That night is outside the seven-day forecast");
+    const { chosen, alternatives } = plan;
 
     const facts = {
       destination: {

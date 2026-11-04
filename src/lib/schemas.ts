@@ -27,6 +27,8 @@ export const interpretRequestSchema = z.object({
     .min(4, "too_short")
     .max(600, "too_long"),
   locale: z.enum(["ar", "en"]).default("ar"),
+  /** The plan on screen, so a question about it can be answered from the app's own data. */
+  context: z.object({ slug: z.string().min(1).max(80), date: dateString, prefs: planPrefsSchema }).nullish(),
 });
 
 /**
@@ -35,6 +37,7 @@ export const interpretRequestSchema = z.object({
  */
 export const interpretedPrefsSchema = z.object({
   redirect: z.string().trim().min(1).max(350).nullish(),
+  question: z.boolean().nullish(),
   experience: z.enum(["kashta", "stars"]).nullish(),
   groupSize: z.coerce.number().int().min(1).max(40).nullish(),
   tempPref: z.enum(["cool", "mild", "warm"]).nullish(),
@@ -47,6 +50,8 @@ export const interpretedPrefsSchema = z.object({
 });
 
 export type InterpretedPrefs = z.infer<typeof interpretedPrefsSchema>;
+
+export const chatAnswerSchema = z.object({ answer: z.string().trim().min(1).max(700) });
 
 export const explainRequestSchema = z.object({
   slug: z.string().min(1).max(80),
