@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check } from "lucide-react";
-import { buildChecklist, type ChecklistGroup } from "@/lib/checklist";
+import { Check, Minus, Plus } from "lucide-react";
+import { buildChecklist, type ChecklistGroup, type ChecklistItem } from "@/lib/checklist";
 import { getDestination } from "@/lib/destinations";
+import { loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import type { Experience, NightMetrics } from "@/lib/types";
 import { useI18n } from "./locale-provider";
 
 const GROUP_ORDER: ChecklistGroup[] = ["documents", "vehicle", "camp", "weather", "stars"];
+const DEFAULT_GROUPS = new Set<ChecklistGroup>(["documents", "vehicle"]);
 
 function storageKey(slug: string, date: string) {
   return `kashta:checklist:${slug}:${date}`;
@@ -18,7 +20,7 @@ export function ChecklistPanel({
   date,
   nightLabel,
   experience,
-  groupSize,
+  groupSize: initialGroupSize,
   metrics,
   aiItems = [],
   dark = false,
@@ -33,7 +35,16 @@ export function ChecklistPanel({
   dark?: boolean;
 }) {
   const { locale, dict } = useI18n();
+  const [groupSize, setGroupSize] = useState(initialGroupSize);
+  const changeGroup = (n: number) => {
+    const next = Math.min(40, Math.max(1, n));
+    setGroupSize(next);
+    savePrefs({ ...loadPrefs(), groupSize: next });
+  };
   const items = useMemo(() => buildChecklist({ experience, groupSize, metrics, permitStatus: getDestination(slug)?.permit.status }), [experience, groupSize, metrics, slug]);
+  const mainItems = items.filter((item) => DEFAULT_GROUPS.has(item.group));
+  const moreItems = items.filter((item) => !DEFAULT_GROUPS.has(item.group));
+  const moreCount = moreItems.length + aiItems.length;
   const allIds = [...items.map((i) => i.id), ...aiItems.map((_, i) => `ai-${i}`)];
   const [checked, setChecked] = useState<Set<string>>(new Set());
 
@@ -74,9 +85,53 @@ export function ChecklistPanel({
 
   const done = allIds.filter((id) => checked.has(id)).length;
   const muted = dark ? "text-star-2" : "text-ink-2";
+  const renderGroups = (groupItems: ChecklistItem[]) => (
+    <div className="grid gap-x-12 gap-y-8 md:grid-cols-2">
+      {GROUP_ORDER.map((g) => {
+        const rows = groupItems.filter((item) => item.group === g);
+        if (!rows.length) return null;
+        return (
+          <section key={g} aria-label={dict.detail.groups[g]}>
+            <h3 className={`small mb-1 font-medium ${muted}`}>{dict.detail.groups[g]}</h3>
+            <ul>
+              {rows.map((i) => (
+                <ChecklistRow key={i.id} label={i.label[locale]} why={i.why?.[locale]} on={checked.has(i.id)} onToggle={() => toggle(i.id)} dark={dark} />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div>
+      <div className="mb-6 flex flex-wrap items-center gap-4">
+        <span id={`group-${slug}`} className="font-medium">{dict.detail.groupSize}</span>
+        <div className="flex items-stretch" role="group" aria-labelledby={`group-${slug}`}>
+          <button
+            type="button"
+            className="btn-quiet !px-3"
+            aria-label={locale === "ar" ? "أنقص شخص" : "One fewer person"}
+            disabled={groupSize <= 1}
+            onClick={() => changeGroup(groupSize - 1)}
+          >
+            <Minus aria-hidden size={18} />
+          </button>
+          <output className="num grid min-h-11 min-w-14 place-items-center px-3 text-lead" aria-live="polite">
+            {groupSize}
+          </output>
+          <button
+            type="button"
+            className="btn-quiet !px-3"
+            aria-label={locale === "ar" ? "زد شخص" : "One more person"}
+            disabled={groupSize >= 40}
+            onClick={() => changeGroup(groupSize + 1)}
+          >
+            <Plus aria-hidden size={18} />
+          </button>
+        </div>
+      </div>
       <div className="flex flex-wrap items-baseline justify-between gap-4">
         <p className={`max-w-[52ch] ${muted}`}>{dict.detail.checklistLead(groupSize, nightLabel)}</p>
         <div className="flex items-center gap-4">
@@ -88,32 +143,27 @@ export function ChecklistPanel({
           </button>
         </div>
       </div>
-      <div className="mt-6 grid gap-x-12 gap-y-8 md:grid-cols-2">
-        {GROUP_ORDER.map((g) => {
-          const groupItems = items.filter((i) => i.group === g);
-          if (!groupItems.length) return null;
-          return (
-            <section key={g} aria-label={dict.detail.groups[g]}>
-              <h3 className={`small mb-1 font-medium ${muted}`}>{dict.detail.groups[g]}</h3>
-              <ul>
-                {groupItems.map((i) => (
-                  <ChecklistRow key={i.id} label={i.label[locale]} why={i.why?.[locale]} on={checked.has(i.id)} onToggle={() => toggle(i.id)} dark={dark} />
-                ))}
-              </ul>
-            </section>
-          );
-        })}
-        {aiItems.length > 0 && (
-          <section aria-label={dict.detail.aiItems}>
-            <h3 className={`small mb-1 font-medium ${muted}`}>{dict.detail.aiItems}</h3>
-            <ul>
-              {aiItems.map((text, i) => (
-                <ChecklistRow key={`ai-${i}`} label={text} on={checked.has(`ai-${i}`)} onToggle={() => toggle(`ai-${i}`)} dark={dark} />
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
+      <div className="mt-6">{renderGroups(mainItems)}</div>
+      {moreCount > 0 && (
+        <details className="mt-4">
+          <summary className="link small min-h-11 cursor-pointer font-medium">
+            {dict.detail.checklistMore(moreCount)}
+          </summary>
+          <div className="mt-4">
+            {renderGroups(moreItems)}
+            {aiItems.length > 0 && (
+              <section aria-label={dict.detail.aiItems} className="mt-8">
+                <h3 className={`small mb-1 font-medium ${muted}`}>{dict.detail.aiItems}</h3>
+                <ul>
+                  {aiItems.map((text, i) => (
+                    <ChecklistRow key={`ai-${i}`} label={text} on={checked.has(`ai-${i}`)} onToggle={() => toggle(`ai-${i}`)} dark={dark} />
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

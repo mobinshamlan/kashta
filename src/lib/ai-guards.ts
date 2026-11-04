@@ -50,3 +50,8 @@ export function collectNumbers(value: unknown, out: number[] = []): number[] {
   }
   return out;
 }
+
+/** Internal field names (camelCase or snake_case identifiers) must never reach the visitor. */
+export function hasInternalKey(text: string): boolean {
+  return /\b[a-z]+[A-Z][A-Za-z0-9]*\b|\b[a-z]+_[a-z_]+\b/u.test(text);
+}

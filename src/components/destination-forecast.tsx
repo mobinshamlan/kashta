@@ -9,19 +9,28 @@ import { loadForecast, rememberForecast } from "@/lib/forecast-storage";
 import { rating, scoreNight } from "@/lib/score";
 import type { Experience, PlanPrefs } from "@/lib/types";
 import { ChecklistPanel } from "./checklist-panel";
-import { ExplainPanel } from "./explain-panel";
+import { ReasonList } from "./recommendation-card";
+import { nightReasons } from "@/lib/reasons";
 import { useI18n } from "./locale-provider";
 import { NightChart } from "./night-chart";
+import { NightSkyTimeline } from "./night-sky-timeline";
 import { CoverageNotice, ErrorState, FactorBars, MoonGlyph, RATING_COLOR, ScoreFigure, Skeleton } from "./ui";
 
 export function DestinationForecast({
   slug,
+  lat,
+  lon,
   initialNight,
   initialExperience,
+  initialTune,
 }: {
   slug: string;
+  lat: number;
+  lon: number;
   initialNight?: string;
   initialExperience?: Experience;
+  /** Preferences carried from the homepage plan, so this page scores the same way. */
+  initialTune?: Partial<PlanPrefs>;
 }) {
   const { locale, dict } = useI18n();
   const [state, setState] = useState<
@@ -32,6 +41,7 @@ export function DestinationForecast({
   const [aiPacking, setAiPacking] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<ClientErrorCode | null>(null);
+  const [showNightSky, setShowNightSky] = useState(false);
   const nightStrip = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -53,10 +63,11 @@ export function DestinationForecast({
     const saved = loadForecast(slug);
     const p = initialNight && saved ? saved.prefs : loadPrefs();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPrefs(initialExperience ? { ...p, experience: initialExperience } : p);
+    setPrefs({ ...p, ...initialTune, ...(initialExperience ? { experience: initialExperience } : {}) });
     if (saved) setState({ s: "ok", data: saved.data });
     void load();
-  }, [load, initialExperience, initialNight, slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, initialExperience, initialNight, slug, JSON.stringify(initialTune)]);
 
   const scores = useMemo(() => {
     if (state.s !== "ok" || !prefs) return [];
@@ -158,11 +169,11 @@ export function DestinationForecast({
                 </span>
                 {s.dealbreakers.length > 0 ? (
                   <span className="small mt-1 font-medium" style={on ? undefined : { color: "var(--color-poor)" }}>
-                    {dict.plan.dealbreaker}: {s.dealbreakers.map((f) => dict.factor[f]).join("، ")}
+                    {dict.plan.dealbreaker}: {s.dealbreakers.map((f) => dict.factor[f]).join(locale === "ar" ? "، " : ", ")}
                   </span>
                 ) : (
                   <span className="small num mt-1 opacity-80" dir="ltr">
-                    {mm.minTemp ?? "—"}° · {mm.maxGust ?? "—"} km/h
+                    {mm.minTemp ?? "—"}° · {mm.maxGust ?? "—"} {locale === "ar" ? "كم/س" : "km/h"}
                   </span>
                 )}
               </label>
@@ -182,21 +193,30 @@ export function DestinationForecast({
           </div>
           {main.assessment === "incomplete" && (
             <p className="mt-4 bg-sand-2 p-3">
-              {dict.plan.incompleteNote} {main.missing.map((f) => dict.factor[f]).join("، ")}
+              {dict.plan.incompleteNote} {main.missing.map((f) => dict.factor[f]).join(locale === "ar" ? "، " : ", ")}
             </p>
           )}
           {main.dealbreakers.length > 0 && <p className="small mt-4 text-poor">{dict.plan.dealbreakerNote}</p>}
-          <div className="mt-8">
-            <FactorBars factors={main.factors} dealbreakers={main.dealbreakers} />
-          </div>
+          {nightReasons(main, main.metrics).length > 0 && (
+            <div className="mt-6" style={{ ["--accent" as string]: "var(--color-clay)" }}>
+              <p className="small mb-3 text-ink-2">{dict.reasons.title}</p>
+              <ReasonList reasons={nightReasons(main, main.metrics)} />
+            </div>
+          )}
         </section>
 
-        <section aria-labelledby="hourly-heading" className="min-w-0">
+        {/* Technical detail for people who want it: factor scores, hourly chart, sky times. */}
+        <details className="place-more min-w-0">
+          <summary className="place-more-summary">{dict.detail.forecastMore}</summary>
+          <div className="mt-6">
+            <FactorBars factors={main.factors} dealbreakers={main.dealbreakers} />
+          </div>
+        <section aria-labelledby="hourly-heading" className="mt-10 min-w-0">
           <h2 id="hourly-heading" className="sub">
             {dict.detail.hourly}
           </h2>
           <p className="small mb-4 text-ink-2">
-            {dict.common.forecastBy} · {dict.common.updated}{" "}
+            {dict.common.updated}{" "}
             <time className="num" dateTime={data.fetchedAt}>
               {new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", {
                 hour: "2-digit",
@@ -236,16 +256,31 @@ export function DestinationForecast({
             <p className="small mt-4 text-star-2">{dict.stars.noLight}</p>
           </div>
         </section>
+
+      <section aria-labelledby="night-sky-heading" className="mt-12 border-t border-ink/15 pt-7">
+        <h2 id="night-sky-heading" className="sr-only">{dict.detail.seeNight}</h2>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <button
+            type="button"
+            className="btn-quiet min-h-11"
+            aria-expanded={showNightSky}
+            aria-controls="night-sky-content"
+            onClick={() => setShowNightSky((open) => !open)}
+          >
+            {showNightSky ? dict.detail.hideNight : dict.detail.seeNight}
+          </button>
+          <p className="small text-ink-2">{nightLabel}</p>
+        </div>
+        {showNightSky && (
+          <div id="night-sky-content">
+            <NightSkyTimeline metrics={m} lat={lat} lon={lon} />
+          </div>
+        )}
+      </section>
+        </details>
       </div>
 
-      <section aria-labelledby="ai-heading" className="mt-16">
-        <h2 id="ai-heading" className="sr-only">
-          {dict.plan.explainTitle}
-        </h2>
-        <ExplainPanel slug={slug} date={m.date} prefs={{ ...prefs, date: m.date }} forecastKey={JSON.stringify([data.fetchedAt, m])} onPacking={setAiPacking} />
-      </section>
-
-      <section aria-labelledby="checklist-heading" className="mt-20">
+      <section aria-labelledby="checklist-heading" className="mt-14">
         <h2 id="checklist-heading" className="head">
           {dict.detail.checklist}
         </h2>

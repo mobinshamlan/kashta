@@ -103,7 +103,7 @@ export function WeekStrip() {
       </ol>
       {data.forecastFetchedAt && (
         <p className="small mt-4 text-ink-2">
-          {dict.common.forecastBy} · {dict.common.updated}{" "}
+          {dict.common.updated}{" "}
           <time dateTime={data.forecastFetchedAt} className="num">
             {new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", {
               hour: "2-digit",

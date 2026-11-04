@@ -1,58 +1,77 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
-import { ArrowUpLeft, Compass, LoaderCircle, Minus, Plus, Wand2 } from "lucide-react";
-import { BrandMark } from "./brand-mark";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { ArrowUpLeft, ChevronDown, ChevronLeft, ChevronRight, Compass, Flame, LoaderCircle, SlidersHorizontal, Sparkles, Wand2 } from "lucide-react";
 import { rememberPlanForecasts } from "@/lib/forecast-storage";
-import { incompleteForecastDates, recommendationHighlights } from "@/lib/recommendation-summary";
-import type { PlanResponse, ScoreRow } from "@/lib/api-types";
+import type { NightSummary, PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
-import { getDestination, estimateDrive } from "@/lib/destinations";
-import { formatDayMonth, formatNight, formatWeekday } from "@/lib/i18n";
-import { PHOTOS } from "@/lib/photos";
+import { RECOMMENDABLE, getDestination, estimateDrive } from "@/lib/destinations";
+import { formatNight, formatWeekday, approxHours, arHoursOf, ltr } from "@/lib/i18n";
+import { bestPerNight, nightReasons } from "@/lib/reasons";
 import { DEFAULT_PREFS, loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import type { InterpretedPrefs } from "@/lib/schemas";
 import { rating } from "@/lib/score";
-import { upcomingNights } from "@/lib/nights";
-import type { Factor, PlanPrefs } from "@/lib/types";
+import { buildPlanShareUrl, type SharedPlan } from "@/lib/share-link";
+import type { Experience, Factor, PlanPrefs } from "@/lib/types";
 import { ExplainPanel, useAiStatus } from "./explain-panel";
 import { useI18n } from "./locale-provider";
-import { CoverageNotice, ErrorState, FactorBars, RATING_COLOR, ScoreFigure, Skeleton } from "./ui";
+import { CoverageMap } from "./coverage-map";
+import { NightScene } from "./night-scene";
+import { NightWindow } from "./night-window";
+import { PlanRail } from "./plan-rail";
+import { RecommendationCard, ReasonList } from "./recommendation-card";
+import { SevenNights, WeekLegend } from "./seven-nights";
+import { ErrorState, FactorBars, RATING_COLOR, Skeleton } from "./ui";
 
 type Field = keyof Omit<PlanPrefs, "city">;
 
 const PRIORITY_OPTIONS: Factor[] = ["temp", "wind", "rain", "dust", "clouds", "moon"];
 
-export function Planner({ initialText = "", initialExperience }: { initialText?: string; initialExperience?: "kashta" | "stars" }) {
+function samePlanPrefs(a: PlanPrefs, b: PlanPrefs) {
+  return a.city === b.city &&
+    a.experience === b.experience &&
+    a.date === b.date &&
+    a.groupSize === b.groupSize &&
+    a.maxDriveHours === b.maxDriveHours &&
+    a.tempPref === b.tempPref &&
+    a.windTolerance === b.windTolerance &&
+    a.priorities.length === b.priorities.length &&
+    a.priorities.every((factor) => b.priorities.includes(factor));
+}
+
+export function Planner({ initialText = "", initialExperience, initialShare, initialNight, initialPlace }: {
+  initialText?: string;
+  initialExperience?: "kashta" | "stars";
+  initialShare?: SharedPlan;
+  /** From the homepage card: open straight at the plan for this night and place. */
+  initialNight?: string;
+  initialPlace?: string;
+}) {
   const { locale, dict } = useI18n();
   const t = dict.plan;
   const ai = useAiStatus();
-  const nights = upcomingNights();
   const formId = useId();
 
-  const [prefs, setPrefs] = useState<PlanPrefs>(DEFAULT_PREFS);
+  const [prefs, setPrefs] = useState<PlanPrefs>(initialShare?.prefs ?? DEFAULT_PREFS);
   const [text, setText] = useState(initialText);
   const [applied, setApplied] = useState<Set<Field>>(new Set());
-  const [understood, setUnderstood] = useState<{ summary?: string | null; unclear?: string[] | null } | null>(null);
+  const [understood, setUnderstood] = useState<{ prefs: InterpretedPrefs; unclear?: string[] | null; unsupported?: string[] } | null>(null);
+  const [interpretReply, setInterpretReply] = useState<string | null>(null);
   const [interpret, setInterpret] = useState<{ s: "idle" | "loading" } | { s: "error"; code: ClientErrorCode }>({ s: "idle" });
-  const [groupInput, setGroupInput] = useState(String(DEFAULT_PREFS.groupSize));
-  const [groupError, setGroupError] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [plan, setPlan] = useState<
     { s: "idle" } | { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: PlanResponse; prefs: PlanPrefs; refreshing?: boolean; refreshError?: ClientErrorCode }
-  >({ s: "idle" });
+  >(initialShare ? { s: "loading" } : { s: "idle" });
   const [selected, setSelected] = useState<string | null>(null);
+  // The sequence: activity → night → place → plan. Fetching always covers all seven nights.
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(initialShare || (initialNight && initialPlace) ? 4 : initialExperience ? 2 : 1);
+  const [night, setNight] = useState<string | null>(initialShare?.night ?? initialNight ?? null);
+  const stepRef = useRef<HTMLHeadingElement>(null);
+  const [shareNotice, setShareNotice] = useState<{ night: string; nightOutsideCoverage: boolean; nightUnscored: boolean; destinationUnavailable: boolean } | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Restore the last preferences used on this device.
-    const stored = loadPrefs();
-    const p = initialExperience ? { ...stored, experience: initialExperience } : stored;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPrefs(p);
-    setGroupInput(String(p.groupSize));
-  }, [initialExperience]);
+  const startedShareRef = useRef<string | null>(null);
+  const handedUsed = useRef(false);
 
   const update = <K extends Field>(key: K, value: PlanPrefs[K]) => {
     setPrefs((p) => {
@@ -74,7 +93,9 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
       return;
     }
     setInterpret({ s: "loading" });
-    const res = await callApi<{ prefs: InterpretedPrefs }>("/api/ai/interpret", {
+    setInterpretReply(null);
+    setUnderstood(null);
+    const res = await callApi<{ prefs?: InterpretedPrefs; unsupported?: string[]; redirect?: string }>("/api/ai/interpret", {
       method: "POST",
       body: JSON.stringify({ text, locale }),
     });
@@ -82,7 +103,17 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
       setInterpret({ s: "error", code: res.code });
       return;
     }
+    if (res.data.redirect) {
+      setUnderstood(null);
+      setInterpretReply(res.data.redirect);
+      setInterpret({ s: "idle" });
+      return;
+    }
     const got = res.data.prefs;
+    if (!got) {
+      setInterpret({ s: "idle" });
+      return;
+    }
     const changed = new Set<Field>();
     const next = { ...prefs };
     if (got.experience) {
@@ -102,11 +133,11 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
       changed.add("windTolerance");
     }
     if (got.maxDriveHours) {
-      next.maxDriveHours = Math.min(5, Math.max(1, Math.round(got.maxDriveHours * 2) / 2));
+      next.maxDriveHours = Math.min(5, Math.max(1.5, Math.round(got.maxDriveHours * 2) / 2));
       changed.add("maxDriveHours");
     }
     if (got.date) {
-      next.date = got.date;
+      if (got.date !== "flexible") setNight(got.date);
       changed.add("date");
     }
     if (got.priorities?.length) {
@@ -115,325 +146,562 @@ export function Planner({ initialText = "", initialExperience }: { initialText?:
     }
     setPrefs(next);
     savePrefs(next);
-    setGroupInput(String(next.groupSize));
     setApplied(changed);
-    setUnderstood({ summary: got.summary, unclear: got.unclear });
+    setUnderstood({ prefs: got, unclear: got.unclear, unsupported: res.data.unsupported });
     setInterpret({ s: "idle" });
   };
 
-  const submit = async (p: PlanPrefs) => {
+  /** The current value of a field the description filled in, for the "and chose for you" line. */
+  const appliedLabel = (f: Field): string => {
+    switch (f) {
+      case "experience": return dict.experience[prefs.experience];
+      case "date": return night ? formatNight(night, locale) : t.flexible;
+      case "groupSize": return `${t.groupLabel}: ${prefs.groupSize}`;
+      case "maxDriveHours": return t.driveValue(prefs.maxDriveHours);
+      case "tempPref": return dict.temp[prefs.tempPref];
+      case "windTolerance": return dict.wind[prefs.windTolerance];
+      case "priorities": return prefs.priorities.map((x) => dict.factor[x]).join(locale === "ar" ? "، " : ", ");
+    }
+  };
+
+  const interpretedSummary = (got: InterpretedPrefs) => {
+    const parts: string[] = [];
+    if (got.experience) parts.push(t.experienceLabel + ": " + dict.experience[got.experience]);
+    if (got.groupSize) parts.push(t.groupLabel + ": " + got.groupSize);
+    if (got.date) parts.push(t.dateLabel + ": " + (got.date === "flexible" ? t.flexible : formatNight(got.date, locale)));
+    if (got.maxDriveHours) {
+      const driveHours = Math.min(5, Math.max(1.5, Math.round(got.maxDriveHours * 2) / 2));
+      parts.push(t.driveLabel + ": " + t.driveValue(driveHours));
+    }
+    if (got.tempPref) parts.push(t.tempLabel + ": " + dict.temp[got.tempPref]);
+    if (got.windTolerance) parts.push(t.windLabel + ": " + dict.wind[got.windTolerance]);
+    if (got.priorities?.length) parts.push(t.prioritiesLabel + ": " + got.priorities.map((factor) => dict.factor[factor]).join(locale === "ar" ? "، " : ", "));
+    return parts.length
+      ? t.interpretedSettings + ": " + parts.join(locale === "ar" ? "، " : "; ")
+      : t.interpretedNone;
+  };
+
+  const submit = useCallback(async (p: PlanPrefs, share?: SharedPlan) => {
       setPlan(previous => previous.s === "ok" ? { ...previous, refreshing: true, refreshError: undefined } : { s: "loading" });
       setSelected(null);
-      requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" }));
       const res = await callApi<PlanResponse>("/api/plan", { method: "POST", body: JSON.stringify(p) });
       if (res.ok) {
         rememberPlanForecasts(res.data, p);
         setPlan({ s: "ok", data: res.data, prefs: p });
-        const first = res.data.results.find((r) => r.score !== null) ?? res.data.results[0];
-        setSelected(first ? `${first.slug}|${first.date}` : null);
+        if (share) {
+          const nightOutsideCoverage = !res.data.nights.includes(share.night);
+          const destinationRows = res.data.results.filter((row) => row.slug === share.slug);
+          const exactRow = nightOutsideCoverage ? undefined : destinationRows.find((row) => row.date === share.night);
+          // Only a scored night can be the plan; otherwise the same place's best scored night.
+          const exactScored = exactRow?.score != null ? exactRow : undefined;
+          const sameDestinationRow = destinationRows.filter((row) => row.score !== null).sort((a, b) => b.score! - a.score! || a.date.localeCompare(b.date))[0];
+          const first = exactScored ?? sameDestinationRow ?? res.data.results.find((row) => row.score !== null);
+          setSelected(first ? `${first.slug}|${first.date}` : null);
+          if (first) setNight(first.date);
+          setShareNotice({ night: share.night, nightOutsideCoverage, nightUnscored: !!exactRow && !exactScored, destinationUnavailable: destinationRows.length === 0 });
+        } else {
+          // A place handed over from the homepage stays chosen while it is still ranked.
+          // Used once: a later re-rank (Start over, new preferences) must not bring it back.
+          const handed = !handedUsed.current && initialPlace && initialNight ? res.data.results.find((row) => row.slug === initialPlace && row.date === initialNight && row.score !== null) : undefined;
+          handedUsed.current = true;
+          setSelected((previous) => previous ?? (handed ? `${handed.slug}|${handed.date}` : null));
+          setShareNotice(null);
+        }
       } else setPlan(previous => previous.s === "ok" ? { ...previous, refreshing: false, refreshError: res.code } : { s: "error", code: res.code });
-  };
+  }, [setPlan, setSelected, setShareNotice, initialPlace, initialNight]);
+
+  useEffect(() => {
+    const stored = loadPrefs();
+    if (initialShare) {
+      const key = JSON.stringify([initialShare.slug, initialShare.night, initialShare.prefs]);
+      const restoredPrefs = { ...initialShare.prefs, date: "flexible" };
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPrefs(restoredPrefs);
+      if (startedShareRef.current !== key) {
+        startedShareRef.current = key;
+        // A shared link shows the sender's settings without replacing the visitor's own saved ones.
+        void submit(restoredPrefs, initialShare);
+      }
+      return;
+    }
+
+    const restored = { ...(initialExperience ? { ...stored, experience: initialExperience } : stored), date: "flexible" };
+    // The drive slider starts at 1.5 h: below that no listed place is reachable.
+    const restoredPrefs = { ...restored, maxDriveHours: Math.max(1.5, restored.maxDriveHours) };
+    setPrefs(restoredPrefs);
+    // Show a useful result straight away; every preference already has a default.
+    if (startedShareRef.current !== "auto") {
+      startedShareRef.current = "auto";
+      void submit(restoredPrefs);
+    }
+  }, [initialExperience, initialShare, submit]);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const n = Number(groupInput);
-    if (!Number.isInteger(n) || n < 1 || n > 40) {
-      setGroupError(true);
-      document.getElementById(`${formId}-group`)?.focus();
-      return;
-    }
-    setGroupError(false);
-    const p = { ...prefs, groupSize: n };
-    setPrefs(p);
-    savePrefs(p);
-    void submit(p);
+    savePrefs(prefs);
+    void submit(prefs);
   };
 
+  const changeMode = (experience: Experience) => {
+    const next = { ...prefs, experience };
+    setPrefs(next);
+    savePrefs(next);
+    setApplied((s) => {
+      if (!s.has("experience")) return s;
+      const n = new Set(s);
+      n.delete("experience");
+      return n;
+    });
+    void submit(next);
+  };
 
+  const resultSettingsMatch = plan.s === "ok" && samePlanPrefs(plan.prefs, prefs);
+  const busy = plan.s === "loading" || (plan.s === "ok" && !!plan.refreshing);
   const legend = "mb-3 font-medium";
+  const panelId = `${formId}-adjust`;
 
-  return (
-    <div className="grid gap-12 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)] lg:gap-12 xl:gap-16">
-      <form onSubmit={onSubmit} noValidate className="planner-form flex min-w-0 flex-col gap-7" aria-label={t.title}>
-        {/* Natural-language description, read by Llama. */}
-        <div>
-          <label htmlFor={`${formId}-text`} className={`${legend} block`}>
-            {t.describeLabel}
-          </label>
+  // Derived for the steps: nights compared, the chosen night, the places for it, the chosen place.
+  const data = plan.s === "ok" ? plan.data : null;
+  const perNight = data ? bestPerNight(data) : [];
+  const bestNight = perNight.reduce<string | null>((top, n) => {
+    if (!n.best) return top;
+    const current = perNight.find((x) => x.night === top)?.best?.score ?? -1;
+    return (n.best.score ?? -1) > current ? n.night : top;
+  }, null);
+  // A night only counts while the forecast scores it (an address, share or helper may name another).
+  const chosenNight = night && perNight.some((n) => n.night === night && n.best) ? night : bestNight;
+  const nightRows: ScoreRow[] = data && chosenNight
+    ? data.results.filter((r) => r.date === chosenNight && r.score !== null).sort((a, b) => b.score! - a.score!)
+    : [];
+  const pickForNight = perNight.find((n) => n.night === chosenNight)?.best;
+  const selectedRow = data?.results.find((r) => `${r.slug}|${r.date}` === selected && r.date === chosenNight);
+  const chosenRow = selectedRow ?? pickForNight ?? nightRows[0];
+  const chosenDest = chosenRow ? getDestination(chosenRow.slug) : undefined;
+  const metricsFor = (n: string) => {
+    if (!data) return undefined;
+    const row = perNight.find((x) => x.night === n)?.best ?? data.results.find((r) => r.date === n);
+    return row ? data.metrics[`${row.slug}|${n}`] : undefined;
+  };
+  const hoursFor = (row: ScoreRow) => data?.forecasts[row.slug]?.metrics.find((m) => m.date === row.date)?.hours;
+  // The address follows the plan, so reload and Back from a place page reopen these choices, and a
+  // used share link or description isn't applied again over later changes.
+  useEffect(() => {
+    if (!data) return;
+    const url = new URL(window.location.href);
+    ["share", "q", "destination", "night", "place", "exp"].forEach((k) => url.searchParams.delete(k));
+    [...url.searchParams.keys()].filter((k) => k !== "exp").forEach((k) => url.searchParams.delete(k));
+    url.searchParams.set("exp", prefs.experience);
+    if (step === 4 && chosenRow) {
+      url.searchParams.set("night", chosenRow.date);
+      url.searchParams.set("place", chosenRow.slug);
+    }
+    if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
+  }, [data, prefs.experience, step, chosenRow]);
+  const placeHref = (row: ScoreRow) => `/destinations/${row.slug}?night=${row.date}&exp=${prefs.experience}`;
+
+  /** "Start over": default preferences (the current activity stays selected), no night, place or
+   *  description, back to step 1. Checklist ticks and fetched forecasts are untouched. */
+  const startOver = () => {
+    const next = { ...DEFAULT_PREFS, experience: prefs.experience };
+    setPrefs(next);
+    savePrefs(next);
+    setNight(null);
+    setSelected(null);
+    setText("");
+    setApplied(new Set());
+    setUnderstood(null);
+    setShareNotice(null);
+    setAdjustOpen(false);
+    if (!samePlanPrefs(next, plan.s === "ok" ? plan.prefs : DEFAULT_PREFS)) void submit(next);
+    goTo(1);
+  };
+
+  const goTo = (next: 1 | 2 | 3 | 4) => {
+    setStep(next);
+    requestAnimationFrame(() => stepRef.current?.focus());
+  };
+  const pickMode = (experience: Experience) => {
+    if (experience !== prefs.experience) {
+      setSelected(null);
+      changeMode(experience);
+    }
+    goTo(2);
+  };
+
+  const STEPS = [
+    { n: 1, label: t.steps.activity, value: dict.experience[prefs.experience] },
+    { n: 2, label: t.steps.night, value: chosenNight ? formatNight(chosenNight, locale, { short: true }) : "—" },
+    { n: 3, label: t.steps.place, value: chosenDest?.name[locale] ?? "—" },
+  ] as const;
+  const stepTitle = { 1: t.activityTitle, 2: t.nightTitle, 3: t.placeTitle, 4: t.planReady }[step];
+  // What is already chosen, shown under the step counter so the context never has to be remembered.
+  const sep = " · ";
+  const context = [
+    step > 1 ? dict.experience[prefs.experience] : null,
+    step > 2 && chosenNight ? formatNight(chosenNight, locale, { short: true }) : null,
+    step > 3 && chosenDest ? chosenDest.name[locale] : null,
+  ].filter(Boolean).join(sep);
+  // The helper: one visible, optional panel that follows the step. Steps 1–2 read a description
+  // into the same settings this page offers; steps 3–4 explain the chosen place and night from the
+  // server's own numbers. It never picks a place, changes a score or speaks for permits.
+  const h = dict.home.helper;
+  const helperId = `${formId}-helper`;
+  const explainStep = step >= 3;
+  const samples = step === 2 ? h.prompts.night : h.prompts.activity;
+  const helper = (
+    <aside className="trip-helper mt-6" data-mode={prefs.experience} aria-labelledby={helperId}>
+      <div className="flex items-center gap-3">
+        <span className="helper-mark" aria-hidden />
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold" id={helperId}>{h.name}</span>
+            <span className="trip-helper-tag">{h.optional}</span>
+          </p>
+          <p className="small text-ink-2">{explainStep ? (step === 3 ? h.explainPlace : h.explainPlan) : h.describeWhatFull}</p>
+        </div>
+      </div>
+      {explainStep ? (
+        data && chosenRow ? (
+          <div className="mt-3">
+            {resultSettingsMatch
+              ? <ExplainPanel compact label={step === 3 ? h.askPlace : h.askPlan} slug={chosenRow.slug} date={chosenRow.date} prefs={prefs} forecastKey={JSON.stringify([data.forecastFetchedAt, data.metrics[`${chosenRow.slug}|${chosenRow.date}`]])} />
+              : <p className="small text-ink-2">{t.explainNeedsPlan}</p>}
+            <p className="small mt-3 text-ink-2">{h.limitExplain}</p>
+          </div>
+        ) : null
+      ) : (
+        <div className="mt-3">
+          <label htmlFor={`${formId}-text`} className="sr-only">{h.label}</label>
           <textarea
             id={`${formId}-text`}
-            className="field min-h-32 resize-y"
+            className="field min-h-[4.5rem] resize-y"
+            rows={2}
             value={text}
             maxLength={600}
-            placeholder={t.describePlaceholder}
-            onChange={(e) => setText(e.target.value)}
+            placeholder={h.placeholder}
+            onChange={(e) => { setText(e.target.value); setInterpretReply(null); setUnderstood(null); }}
             aria-invalid={interpret.s === "error" && interpret.code === "invalid_input"}
           />
+          <p className="small mt-2 text-ink-2">{h.try}</p>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {samples.map((sample) => (
+              <button key={sample} type="button" className="helper-chip" onClick={() => setText(sample)}>{sample}</button>
+            ))}
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className="btn-quiet"
-              onClick={runInterpret}
-              disabled={ai !== true || interpret.s === "loading"}
-            >
+            <button type="button" className="btn-quiet" onClick={runInterpret} disabled={ai !== true || interpret.s === "loading" || text.trim().length === 0}>
               {interpret.s === "loading" ? <LoaderCircle aria-hidden size={18} className="animate-spin" /> : <Wand2 aria-hidden size={18} />}
-              {interpret.s === "loading" ? t.describing : t.describeButton}
+              {interpret.s === "loading" ? t.describing : h.submit}
             </button>
-            <span className="small num text-ink-2">{text.length}/600</span>
           </div>
           {ai === false && <p className="small mt-3 text-ink-2">{dict.errors.ai_not_configured}</p>}
           <div aria-live="polite">
             {interpret.s === "error" && <ErrorState className="mt-4" code={interpret.code} />}
+            {interpretReply && <p role="status" className="small mt-3 rounded-xl bg-sand-2 p-3">{interpretReply}</p>}
             {understood && (
-              <div className="mt-4 bg-sand-2 p-4">
-                <p className="small font-medium">{t.understood}</p>
-                {understood.summary && <p className="mt-1">{understood.summary}</p>}
-                {!!understood.unclear?.length && (
-                  <p className="small mt-2 text-ink-2">
-                    {t.unclear} {understood.unclear.join("، ")}
+              <div className="small mt-3 rounded-xl bg-sand-2 p-3">
+                <p><span className="font-medium">{h.understood}</span> {interpretedSummary(understood.prefs)}</p>
+                {applied.size > 0 && (
+                  <p className="mt-1">
+                    <span className="font-medium">{h.filled}</span>{" "}
+                    {[...applied].map((f) => appliedLabel(f)).filter(Boolean).join(locale === "ar" ? "، " : ", ")}
                   </p>
                 )}
+                {understood.unsupported?.includes("moon_viewing") && <p role="status" className="mt-2 text-ink-2">{t.moonViewingUnsupported}</p>}
+                {!!understood.unclear?.length && <p className="mt-2 text-ink-2">{t.unclear} {understood.unclear.join(locale === "ar" ? "، " : ", ")}</p>}
+                <button type="button" className="btn-quiet mt-3" onClick={() => { savePrefs(prefs); void submit(prefs); goTo(understood.prefs.date && understood.prefs.date !== "flexible" ? 3 : 2); }}>{t.apply}</button>
               </div>
             )}
           </div>
+          <p className="small mt-3 text-ink-2">{h.limitDescribe}</p>
         </div>
+      )}
+    </aside>
+  );
 
-        <fieldset>
-          <legend className={legend}>
-            {t.experienceLabel}
-            <AppliedTag on={applied.has("experience")} label={t.applied} />
-          </legend>
-          <div className="grid grid-cols-2 gap-2">
-            {(["kashta", "stars"] as const).map((x) => (
-              <label key={x} className="choice flex-col !items-start gap-1 !py-4">
-                <input type="radio" name="experience" checked={prefs.experience === x} onChange={() => update("experience", x)} />
-                <span className="font-medium">{dict.experience[x]}</span>
-                <span className="small opacity-80">{x === "kashta" ? dict.experience.kashtaDesc : dict.experience.starsDesc}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+  return (
+    <div data-mode={prefs.experience}>
+      {/* Where you are, and how to step back. */}
+      <PlanRail
+          label={t.title}
+          step={step}
+          onStep={goTo}
+          steps={[
+            { n: 1, label: t.steps.activity, value: STEPS[0].value, reachable: true },
+            { n: 2, label: t.steps.night, value: STEPS[1].value, reachable: true },
+            { n: 3, label: t.steps.place, value: STEPS[2].value, reachable: !!data },
+            { n: 4, label: t.steps.plan, reachable: !!data && !!chosenRow },
+          ]}
+        />
+      <div className="mt-4 flex justify-end">
+        <button type="button" className="btn-quiet" aria-expanded={adjustOpen} aria-controls={panelId} onClick={() => setAdjustOpen((v) => !v)}>
+          <SlidersHorizontal aria-hidden size={18} />
+          {t.more}
+          <ChevronDown aria-hidden size={16} className={`transition-transform ${adjustOpen ? "rotate-180" : ""}`} />
+        </button>
+      </div>
 
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <p className={legend} id={`${formId}-city`}>
-              {t.cityLabel}
-            </p>
-            <p aria-labelledby={`${formId}-city`} className="flex min-h-11 items-center bg-sand-2 px-4">
-              {t.city}
-            </p>
-            <p className="small mt-1 text-ink-2">{t.cityNote}</p>
-          </div>
-          <div>
-            <label htmlFor={`${formId}-group`} className={`${legend} block`}>
-              {t.groupLabel}
-              <AppliedTag on={applied.has("groupSize")} label={t.applied} />
-            </label>
-            <div className="flex items-stretch">
-              <button
-                type="button"
-                className="btn-quiet !px-3"
-                aria-label="-1"
-                onClick={() => {
-                  const n = Math.max(1, (Number(groupInput) || 1) - 1);
-                  setGroupInput(String(n));
-                  update("groupSize", n);
-                }}
-              >
-                <Minus aria-hidden size={18} />
-              </button>
-              <input
-                id={`${formId}-group`}
-                className="field num !w-full text-center"
-                inputMode="numeric"
-                value={groupInput}
-                aria-invalid={groupError}
-                aria-describedby={groupError ? `${formId}-group-err` : undefined}
-                onChange={(e) => {
-                  setGroupInput(e.target.value.replace(/[^\d٠-٩]/g, "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))));
-                  setGroupError(false);
-                }}
-                onBlur={() => {
-                  const n = Number(groupInput);
-                  if (Number.isInteger(n) && n >= 1 && n <= 40) update("groupSize", n);
-                }}
-              />
-              <button
-                type="button"
-                className="btn-quiet !px-3"
-                aria-label="+1"
-                onClick={() => {
-                  const n = Math.min(40, (Number(groupInput) || 0) + 1);
-                  setGroupInput(String(n));
-                  update("groupSize", n);
-                }}
-              >
-                <Plus aria-hidden size={18} />
-              </button>
-            </div>
-            {groupError && (
-              <p id={`${formId}-group-err`} role="alert" className="small mt-2 text-poor">
-                {t.validationGroup}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <fieldset>
-          <legend className={legend}>
-            {t.dateLabel}
-            <AppliedTag on={applied.has("date")} label={t.applied} />
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            <label className="choice">
-              <input type="radio" name="date" checked={prefs.date === "flexible"} onChange={() => update("date", "flexible")} />
-              {t.flexible}
-            </label>
-            {nights.map((n, i) => (
-              <label key={n} className="choice">
-                <input type="radio" name="date" checked={prefs.date === n} onChange={() => update("date", n)} />
-                <span>
-                  {i === 0 ? dict.common.tonight : formatWeekday(n, locale)}{" "}
-                  <span className="small num opacity-75">{formatDayMonth(n, locale)}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          {plan.s === "ok" ? <CoverageNotice nights={incompleteForecastDates(plan.data.forecasts, prefs)} /> : <p className="small mt-3 text-ink-2">{t.coverageHint}</p>}
-        </fieldset>
-
+      <form id={panelId} hidden={!adjustOpen} onSubmit={onSubmit} noValidate className="adjust-panel mt-5 flex flex-col gap-7 p-5 md:p-7" aria-label={t.adjustTitle}>
         <div>
-          <label htmlFor={`${formId}-drive`} className={`${legend} flex justify-between`}>
+          <label htmlFor={`${formId}-drive`} className={`${legend} flex justify-between gap-4`}>
             <span>
               {t.driveLabel}
               <AppliedTag on={applied.has("maxDriveHours")} label={t.applied} />
             </span>
-            <span className="num">{t.driveValue(prefs.maxDriveHours)}</span>
+            <span className="num">{approxHours(prefs.maxDriveHours, locale)}</span>
           </label>
           <input
             id={`${formId}-drive`}
             type="range"
-            min={1}
+            min={1.5}
             max={5}
             step={0.5}
             value={prefs.maxDriveHours}
+            aria-valuetext={approxHours(prefs.maxDriveHours, locale)}
             onChange={(e) => update("maxDriveHours", Number(e.target.value))}
             className="h-11 w-full accent-[var(--color-clay)]"
           />
-          <p className="small text-ink-2">{dict.common.driveEstimate}</p>
+          <p className="small text-ink-2">{t.from}. {dict.common.estimateNote}.</p>
         </div>
 
-        <fieldset>
-          <legend className={legend}>
-            {t.tempLabel}
-            <AppliedTag on={applied.has("tempPref")} label={t.applied} />
-          </legend>
-          <div className="grid grid-cols-3 gap-2">
-            {(["cool", "mild", "warm"] as const).map((x) => (
-              <label key={x} className="choice justify-center">
-                <input type="radio" name="temp" checked={prefs.tempPref === x} onChange={() => update("tempPref", x)} />
-                {dict.temp[x]}
-              </label>
-            ))}
+        <details className="faq-item" open={applied.has("tempPref") || applied.has("windTolerance") || applied.has("priorities") || undefined}>
+          <summary>{t.more}</summary>
+          <div className="flex flex-col gap-7 pb-5 pt-3">
+            <fieldset>
+              <legend className={legend}>
+                {t.tempLabel}
+                <AppliedTag on={applied.has("tempPref")} label={t.applied} />
+              </legend>
+              <div className="grid grid-cols-3 gap-2">
+                {(["cool", "mild", "warm"] as const).map((x) => (
+                  <label key={x} className="choice justify-center">
+                    <input type="radio" name="temp" checked={prefs.tempPref === x} onChange={() => update("tempPref", x)} />
+                    {dict.temp[x]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend className={legend}>
+                {t.windLabel}
+                <AppliedTag on={applied.has("windTolerance")} label={t.applied} />
+              </legend>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {(["low", "medium", "high"] as const).map((x) => (
+                  <label key={x} className="choice justify-center text-center">
+                    <input type="radio" name="wind" checked={prefs.windTolerance === x} onChange={() => update("windTolerance", x)} />
+                    {dict.wind[x]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset aria-describedby={`${formId}-priorities-hint`}>
+              <legend className={legend}>
+                {t.prioritiesLabel}
+                <AppliedTag on={applied.has("priorities")} label={t.applied} />
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {PRIORITY_OPTIONS.map((f) => {
+                  const on = prefs.priorities.includes(f);
+                  const full = !on && prefs.priorities.length >= 3;
+                  return (
+                    <label key={f} className={`choice ${full ? "opacity-50" : ""}`}>
+                      <input type="checkbox" checked={on} disabled={full} onChange={() => update("priorities", on ? prefs.priorities.filter((p) => p !== f) : [...prefs.priorities, f])} />
+                      {dict.factor[f]}
+                    </label>
+                  );
+                })}
+              </div>
+              <p id={`${formId}-priorities-hint`} className="small mt-3 text-ink-2" role="status">{prefs.priorities.length === 3 ? t.prioritiesLimit : t.prioritiesCount(prefs.priorities.length)}</p>
+            </fieldset>
           </div>
-        </fieldset>
+        </details>
 
-        <fieldset>
-          <legend className={legend}>
-            {t.windLabel}
-            <AppliedTag on={applied.has("windTolerance")} label={t.applied} />
-          </legend>
-          <div className="grid grid-cols-3 gap-2">
-            {(["low", "medium", "high"] as const).map((x) => (
-              <label key={x} className="choice justify-center text-center">
-                <input type="radio" name="wind" checked={prefs.windTolerance === x} onChange={() => update("windTolerance", x)} />
-                {dict.wind[x]}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset aria-describedby={`${formId}-priorities-hint`}>
-          <legend className={legend}>
-            {t.prioritiesLabel}
-            <AppliedTag on={applied.has("priorities")} label={t.applied} />
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {PRIORITY_OPTIONS.map((f) => {
-              const on = prefs.priorities.includes(f);
-              const full = !on && prefs.priorities.length >= 3;
-              return (
-                <label key={f} className={`choice ${full ? "opacity-50" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    disabled={full}
-                    onChange={() =>
-                      update("priorities", on ? prefs.priorities.filter((p) => p !== f) : [...prefs.priorities, f])
-                    }
-                  />
-                  {dict.factor[f]}
-                </label>
-              );
-            })}
-          </div>
-          <p id={`${formId}-priorities-hint`} className="small mt-3 text-ink-2" role="status">{prefs.priorities.length === 3 ? t.prioritiesLimit : t.prioritiesCount(prefs.priorities.length)}</p>
-        </fieldset>
-
-        <button type="submit" className="btn w-full" disabled={plan.s === "loading" || (plan.s === "ok" && !!plan.refreshing)}>
-          {plan.s === "loading" || (plan.s === "ok" && plan.refreshing) ? <LoaderCircle aria-hidden size={19} className="animate-spin" /> : <Compass aria-hidden size={19} />}
-          {plan.s === "loading" || (plan.s === "ok" && plan.refreshing) ? t.submitting : t.submit}
+        <button type="submit" className="btn w-full sm:w-auto sm:self-start" disabled={busy}>
+          {busy ? <LoaderCircle aria-hidden size={19} className="animate-spin" /> : <Compass aria-hidden size={19} />}
+          {busy ? t.submitting : t.apply}
         </button>
       </form>
 
-      <div ref={resultsRef} data-state={plan.s} className="planner-results min-w-0 scroll-mt-28" aria-live="polite" aria-busy={plan.s === "loading" || (plan.s === "ok" && !!plan.refreshing)}>
-        <h2 className="planner-step sub"><span className="num" aria-hidden>02</span>{t.resultsTitle}</h2>
-        {plan.s === "idle" && (
-          <div className="mt-6">
-            <div className="planner-empty-photo relative aspect-[2/1] max-h-64 overflow-hidden">
-              <Image
-                src={PHOTOS["dahna-crest"].src}
-                alt={PHOTOS["dahna-crest"].alt[locale]}
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-cover"
-              />
-            </div>
-            <p className="planner-empty-caption small text-ink-2"><BrandMark className="h-7 w-8 shrink-0" />{PHOTOS["dahna-crest"].caption[locale]}</p>
-            <p className="lead mt-6">{t.emptyTitle}</p>
-            <p className="mt-2 max-w-[48ch] text-ink-2">{t.emptyBody}</p>
-          </div>
+
+      <div ref={resultsRef} data-state={plan.s} className="planner-results mt-8 min-w-0" aria-live="polite" aria-busy={busy}>
+        <p className="small flex flex-wrap items-center gap-x-3 text-ink-2">
+          {t.stepOf(step, 4)}
+          {context && <span className="text-ink">{context}</span>}
+          {step > 1 && <button type="button" className="link min-h-11" onClick={() => goTo((step - 1) as 1 | 2 | 3)}>{t.back}</button>}
+        </p>
+        <h2 ref={stepRef} tabIndex={-1} className="sub mt-1 outline-none">{stepTitle}</h2>
+
+        {plan.s === "ok" && shareNotice?.nightOutsideCoverage && (
+          <p role="status" className="small mt-3 border-s-2 border-clay bg-sand-2 p-3">{t.shareNightOutsideCoverage(formatNight(shareNotice.night, locale))}</p>
         )}
-        {plan.s === "loading" && (
-          <div className="mt-6 flex flex-col gap-3">
-            <p className="small flex items-center gap-2 pb-3 text-olive"><LoaderCircle aria-hidden size={17} className="animate-spin" />{dict.common.loading}</p>
-            <Skeleton className="h-40" />
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
-          </div>
+        {plan.s === "ok" && shareNotice?.nightUnscored && (
+          <p role="status" className="small mt-3 border-s-2 border-clay bg-sand-2 p-3">{t.shareNightUnscored(formatNight(shareNotice.night, locale))}</p>
         )}
-        {plan.s === "error" && <ErrorState className="mt-6" code={plan.code} onRetry={() => submit(prefs)} />}
-        {plan.s === "ok" && plan.data.forecastFetchedAt && (
-          <div className="small mt-4 flex flex-wrap items-center justify-between gap-3 text-ink-2" aria-live="polite">
-            <p>{dict.common.updated} <time dateTime={plan.data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(plan.data.forecastFetchedAt))}</time></p>
-            {plan.refreshing && <p>{dict.detail.refreshing}</p>}
-          </div>
+        {plan.s === "ok" && shareNotice?.destinationUnavailable && (
+          <p role="status" className="small mt-3 border-s-2 border-clay bg-sand-2 p-3">{t.shareDestinationUnavailable}</p>
         )}
         {plan.s === "ok" && plan.refreshError && <div role="status" className="mt-3"><p className="small mb-2 text-ink-2">{dict.detail.refreshFailed}</p><ErrorState className="!bg-sand-2" code={plan.refreshError} onRetry={() => submit(prefs)} /></div>}
-        {plan.s === "ok" && (
-          <Results
-            data={plan.data}
-            prefs={plan.prefs}
-            currentPrefs={prefs}
-            selected={selected}
-            onSelect={setSelected}
-            onAdjustDrive={(maxDriveHours) => {
-              const next = { ...plan.prefs, maxDriveHours };
-              update("maxDriveHours", maxDriveHours);
-              void submit(next);
-            }}
-          />
+
+        {/* 1 · Activity: two scenes, not two paragraphs. */}
+        {step === 1 && (
+          <fieldset className="mt-6">
+            <legend className="sr-only">{t.activityTitle}</legend>
+            <div className="grid grid-cols-2 gap-3 md:gap-4">
+              {(["kashta", "stars"] as const).map((x) => (
+                <label key={x} className="mode-tile" data-mode={x}>
+                  <input type="radio" name="plan-activity" value={x} checked={prefs.experience === x} onChange={() => pickMode(x)} onClick={() => prefs.experience === x && goTo(2)} />
+                  <span className="mode-tile-art" aria-hidden><NightScene mode={x} tile /></span>
+                  <span className="mode-tile-text">
+                    <span className="flex items-center gap-2 lead font-medium">
+                      {x === "kashta" ? <Flame aria-hidden size={20} /> : <Sparkles aria-hidden size={20} />}
+                      {dict.experience[x]}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {helper}
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button type="button" className="btn plan-go" onClick={() => goTo(2)}>{t.toNight}</button>
+              {data && pickForNight && <button type="button" className="btn-quiet" onClick={() => goTo(4)}>{t.takeBest}</button>}
+            </div>
+          </fieldset>
+        )}
+
+        {step > 1 && !data && plan.s !== "error" && (
+          <div className="mt-6 grid gap-2" aria-hidden>
+            <p className="small flex items-center gap-2 text-olive"><LoaderCircle aria-hidden size={17} className="animate-spin" />{dict.common.loading}</p>
+            <Skeleton className="h-44 !rounded-[18px]" />
+          </div>
+        )}
+        {step > 1 && plan.s === "error" && <ErrorState className="mt-6" code={plan.code} onRetry={() => submit(prefs)} />}
+        {step > 1 && data && data.considered.length === 0 && (
+          <NoneInRange prefs={plan.s === "ok" ? plan.prefs : prefs} currentPrefs={prefs} onAdjustDrive={(maxDriveHours) => {
+            const next = { ...prefs, maxDriveHours };
+            update("maxDriveHours", maxDriveHours);
+            void submit(next);
+          }} />
+        )}
+
+        {/* 2 · Night: the week as bars; numbers only for the chosen night's pick. */}
+        {step === 2 && data && data.considered.length > 0 && (
+          <div className="mt-6">
+            <div className="on-night on-dark rounded-[18px] p-4 md:p-6">
+              <SevenNights compact nights={perNight} metricsFor={metricsFor} selected={chosenNight} bestNight={bestNight} onSelect={(n) => { setNight(n); setSelected(null); }} />
+              {chosenNight && <p className="small mt-4 muted">{formatNight(chosenNight, locale)}</p>}
+            </div>
+            {/* Same legend as the homepage: what a tall bar and "incomplete" mean. */}
+            <WeekLegend className="mt-3 text-ink-2" nights={perNight} mode={prefs.experience} />
+            {!data.airQuality.available && <p className="small mt-3 text-ink-2">{t.airDown}</p>}
+            {helper}
+            <StepNav onBack={() => goTo(1)} backLabel={t.back} next={chosenNight ? { label: t.toPlace, onClick: () => goTo(3) } : undefined} />
+            <details className="faq-item mt-8">
+              <summary>{t.matrixToggle}</summary>
+              <Matrix data={data} selected={selected} onSelect={(k) => { setSelected(k); setNight(k.split("|")[1]); }} />
+            </details>
+          </div>
+        )}
+
+        {/* 3 · Place: a short set, one reason each; details and map on request. */}
+        {step === 3 && data && data.considered.length > 0 && (
+          <div className="mt-6">
+            {nightRows.length === 0 && <p className="bg-sand-2 p-4">{dict.home.placesNone}</p>}
+            {nightRows.length > 0 && (
+              <fieldset>
+                <legend className="sr-only">{t.placeTitle}</legend>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {nightRows.slice(0, 4).map((r) => {
+                    const d = getDestination(r.slug)!;
+                    const rt = rating(r.score);
+                    const on = chosenRow?.slug === r.slug;
+                    const reason = nightReasons(r, data.metrics[`${r.slug}|${r.date}`], 1);
+                    return (
+                      <label key={r.slug} className="place-option !items-start">
+                        <input type="radio" name="plan-place" value={r.slug} checked={on} onChange={() => setSelected(`${r.slug}|${r.date}`)} />
+                        <span className="min-w-0">
+                          <span className="flex flex-wrap items-center gap-2 font-medium">
+                            {d.name[locale]}
+                            {pickForNight?.slug === r.slug && <span className="small rounded-full bg-sky px-2 py-0.5 text-[var(--accent)]">{dict.home.bestForNight}</span>}
+                          </span>
+                          <ReasonList className="small mt-2" reasons={reason} />
+                          <span className="small mt-2 flex flex-wrap gap-x-3 text-ink-2">
+                            <span title={dict.common.estimateNote}><bdi className="num">{approxHours(estimateDrive(d).hours, locale)}</bdi></span>
+                            <span>{dict.permit.short[d.permit.status]}</span>
+                          </span>
+                        </span>
+                        <span className="rating-pill" style={{ ["--rating" as string]: RATING_COLOR[rt] }}>{dict.rating[rt]}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+            {chosenRow && (
+              <details className="faq-item mt-5">
+                <summary>{dict.home.nightDetails}: {chosenDest?.name[locale]}</summary>
+                <div className="on-night grid gap-5 rounded-[14px] p-4 md:grid-cols-2 md:p-5" data-mode={prefs.experience}>
+                  {chosenDest && hoursFor(chosenRow) && <NightWindow date={chosenRow.date} lat={chosenDest.lat} lon={chosenDest.lon} hours={hoursFor(chosenRow)!} mode={prefs.experience} />}
+                  <ul className="grid content-start gap-2">
+                    {modeFacts(prefs.experience, data.metrics[`${chosenRow.slug}|${chosenRow.date}`], locale).map((f) => (
+                      <li key={f.label} className="flex justify-between gap-4"><span className="muted">{f.label}</span><bdi className="num font-medium">{f.value}</bdi></li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            )}
+            {nightRows.length > 0 && (
+              <details className="faq-item">
+                <summary>{t.onMap}</summary>
+                <div className="pb-5">
+                  <CoverageMap compact legend={false} scores={Object.fromEntries(RECOMMENDABLE.map((d) => [d.slug, nightRows.find((r) => r.slug === d.slug)?.score ?? null]))} pick={chosenRow?.slug} mode={prefs.experience} />
+                </div>
+              </details>
+            )}
+            {helper}
+            <StepNav onBack={() => goTo(2)} backLabel={t.back} next={chosenRow ? { label: t.toPlan, onClick: () => { setSelected(`${chosenRow.slug}|${chosenRow.date}`); goTo(4); } } : undefined} />
+          </div>
+        )}
+
+        {/* 4 · Plan: the answer, the next action, and the rest folded away. */}
+        {step === 4 && data && chosenRow && chosenDest && (
+          <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-12">
+            <RecommendationCard
+              row={chosenRow}
+              metrics={data.metrics[`${chosenRow.slug}|${chosenRow.date}`]}
+              experience={prefs.experience}
+              kicker={dict.experience[prefs.experience]}
+              hours={hoursFor(chosenRow)}
+              actions={
+                <>
+                  <Link href={`${placeHref(chosenRow)}#checklist-heading`} className="btn btn-accent">
+                    {dict.home.openFull}
+                    <ArrowUpLeft aria-hidden size={18} className="direction-arrow" />
+                  </Link>
+                  <SharePlanButton slug={chosenRow.slug} night={chosenRow.date} prefs={prefs} dark />
+                </>
+              }
+            />
+            <div className="min-w-0">
+              <details className="faq-item border-t border-ink/15">
+                <summary>{t.scoreBreakdown}</summary>
+                <div className="pb-5">
+                  {chosenRow.assessment === "incomplete" && <p className="mb-4 bg-sand-2 p-3">{t.incompleteNote} {chosenRow.missing.map((m) => dict.factor[m]).join(locale === "ar" ? "، " : ", ")}</p>}
+                  <FactorBars factors={chosenRow.factors} dealbreakers={chosenRow.dealbreakers} />
+                </div>
+              </details>
+              {helper}
+              <button type="button" className="link small mt-4 min-h-11" onClick={startOver}>{dict.home.startOver}</button>
+            </div>
+          </div>
+        )}
+        {step === 4 && data && !chosenRow && data.considered.length > 0 && <p className="mt-6 bg-sand-2 p-4">{dict.home.placesNone}</p>}
+
+        {data && (
+          <p className="small mt-10 text-ink-2">
+            {data.forecastFetchedAt ? <>{dict.common.updated} <time className="num" dateTime={data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(data.forecastFetchedAt))}</time></> : t.resultsTimestampMissing}
+            {plan.s === "ok" && !resultSettingsMatch && <> · {t.resultsUsePreviousSettings}</>}
+          </p>
         )}
       </div>
     </div>
@@ -444,220 +712,104 @@ function AppliedTag({ on, label }: { on: boolean; label: string }) {
   return on ? <span className="small ms-2 bg-clay px-1.5 py-0.5 text-clay-ink">{label}</span> : null;
 }
 
-function BestPick({ row, prefs }: { row: ScoreRow; prefs: PlanPrefs }) {
-  const { locale, dict } = useI18n();
-  const destination = getDestination(row.slug)!;
-  const { strongest, tradeoff } = recommendationHighlights(row.factors);
+function StepNav({ onBack, backLabel, next }: { onBack?: () => void; backLabel?: string; next?: { label: string; onClick: () => void } }) {
+  const { locale } = useI18n();
+  // Forward points along the reading direction: left in Arabic, right in English.
+  const Forward = locale === "ar" ? ChevronLeft : ChevronRight;
   return (
-    <section className="best-pick mt-6 rounded-md border border-olive/30 bg-sand-2 p-5" aria-label={dict.plan.bestSummary}>
-      <p className="small font-medium text-olive">{row.score === null ? dict.plan.availableComparison : dict.plan.bestSummary}</p>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
-        <div><h3 className="lead font-medium">{destination.name[locale]}</h3><p className="small mt-1 text-ink-2">{formatNight(row.date, locale)}</p></div>
-        <ScoreFigure score={row.score} size="sm" />
-      </div>
-      {row.score === null ? <p className="mt-4">{dict.plan.incompleteNote} {row.missing.map(factor => dict.factor[factor]).join("، ")}</p> : <>
-        {strongest && <p className="mt-4">{dict.plan.summaryFactor} {dict.factor[strongest.factor]}: <bdi className="num">{strongest.value}</bdi>.</p>}
-        <p className="small mt-2 text-ink-2">{dict.plan.summaryTradeoff} {tradeoff ? <>{dict.factor[tradeoff.factor]}: <bdi className="num">{tradeoff.value}</bdi> ({tradeoff.score}/100).</> : dict.plan.summaryDrive(estimateDrive(destination).hours)}</p>
-      </>}
-      {row.dealbreakers.length > 0 && <p className="small mt-3 text-poor">{dict.plan.dealbreaker}: {row.dealbreakers.map(factor => dict.factor[factor]).join("، ")}</p>}
-      <Link href={`/destinations/${row.slug}?night=${row.date}&exp=${prefs.experience}`} className="link mt-4 inline-flex min-h-11 items-center font-medium">{dict.common.viewDestination}</Link>
-    </section>
-  );
-}
-
-function Results({
-  data,
-  prefs,
-  currentPrefs,
-  selected,
-  onSelect,
-  onAdjustDrive,
-}: {
-  data: PlanResponse;
-  prefs: PlanPrefs;
-  currentPrefs: PlanPrefs;
-  selected: string | null;
-  onSelect: (k: string) => void;
-  onAdjustDrive: (hours: number) => void;
-}) {
-  const { locale, dict } = useI18n();
-  const t = dict.plan;
-  const prefsMatch = JSON.stringify([prefs.city, prefs.experience, prefs.date, prefs.groupSize, prefs.maxDriveHours, prefs.tempPref, prefs.windTolerance, prefs.priorities]) ===
-    JSON.stringify([currentPrefs.city, currentPrefs.experience, currentPrefs.date, currentPrefs.groupSize, currentPrefs.maxDriveHours, currentPrefs.tempPref, currentPrefs.windTolerance, currentPrefs.priorities]);
-
-  if (data.considered.length === 0) {
-    return (
-      <div className="mt-6 bg-sand-2 p-6">
-        <p className="lead">{t.noneInRange}</p>
-        {prefsMatch && prefs.maxDriveHours <= 1 && <p className="small mt-2 text-ink-2">{t.closerMinimum}</p>}
-      </div>
-    );
-  }
-
-  const nightsShown = prefs.date === "flexible" ? data.nights : [prefs.date];
-  const top = data.results.slice(0, 6);
-  const sel = data.results.find((r) => `${r.slug}|${r.date}` === selected) ?? top[0];
-  const selMetrics = sel ? data.metrics[`${sel.slug}|${sel.date}`] : undefined;
-  const selDest = sel ? getDestination(sel.slug) : undefined;
-
-  return (
-    <div className="results-enter mt-4">
-      <p className="text-ink-2">
-        {t.resultsLead(data.considered.length, nightsShown.length)}{" "}
-        {data.excludedByDistance.length > 0 && t.excluded(data.excludedByDistance.length)}
-      </p>
-      {!data.airQuality.available && <p className="mt-2 bg-sand-2 p-3">{t.airDown}</p>}
-      <CoverageNotice nights={incompleteForecastDates(data.forecasts, prefs)} />
-      {top[0] && <BestPick row={top[0]} prefs={prefs} />}
-      {prefsMatch ? (
-        <CloserOption data={data} prefs={prefs} onConfirm={onAdjustDrive} />
-      ) : (
-        <p className="small mt-4 text-ink-2">{t.closerNeedsPlan}</p>
+    <div className="mt-6 flex flex-wrap items-center gap-3">
+      {next && (
+        <button type="button" className="btn plan-go" onClick={next.onClick}>
+          {next.label}
+          <Forward aria-hidden size={18} />
+        </button>
       )}
-
-      <h3 className="mt-10 mb-3 font-medium">{t.topPicks}</h3>
-      <ol role="list" className="recommendation-list">
-        {top.map((r, i) => {
-          const d = getDestination(r.slug)!;
-          const k = `${r.slug}|${r.date}`;
-          const on = sel && k === `${sel.slug}|${sel.date}`;
-          const rt = rating(r.score);
-          return (
-            <li key={k}>
-              <button
-                type="button"
-                aria-pressed={!!on}
-                onClick={() => onSelect(k)}
-                className={`recommendation-choice grid min-h-16 w-full grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 text-start transition-colors ${
-                  on ? "bg-olive text-sand" : "hover:bg-sand-2"
-                }`}
-              >
-                <span className="num opacity-70">{i + 1}</span>
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">{d.name[locale]}</span>
-                  <span className={`small block ${on ? "opacity-80" : "text-ink-2"}`}>
-                    {formatNight(r.date, locale, { short: true })} · ~{estimateDrive(d).hours} {dict.common.hours}
-                  </span>
-                </span>
-                <span className="text-end">
-                  <span className="num block lead font-light leading-none">{r.score ?? "—"}</span>
-                  <span className="small block font-medium" style={on ? undefined : { color: RATING_COLOR[rt] }}>
-                    {dict.rating[rt]}
-                  </span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-
-      {sel && selDest && (
-        <section key={`${sel.slug}|${sel.date}`} className="recommendation-detail results-enter mt-8 bg-sand-2 p-5 md:p-8" aria-labelledby="sel-heading">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div>
-              <h3 id="sel-heading" className="sub">
-                {selDest.name[locale]}
-              </h3>
-              <p className="text-ink-2">{formatNight(sel.date, locale)}</p>
-            </div>
-            <ScoreFigure score={sel.score} size="md" />
-          </div>
-          {sel.assessment === "incomplete" && (
-            <p className="mt-4 bg-sand p-3">
-              {t.incompleteNote} {sel.missing.map((m) => dict.factor[m]).join("، ")}
-            </p>
-          )}
-          {sel.dealbreakers.length > 0 && <p className="small mt-4 text-poor">{t.dealbreakerNote}</p>}
-          <h4 className="mt-8 mb-4 font-medium">{t.breakdown}</h4>
-          <FactorBars factors={sel.factors} dealbreakers={sel.dealbreakers} />
-          {selMetrics?.sunset && (
-            <p className="small mt-6 text-ink-2">
-              {dict.detail.sunset} <span className="num" dir="ltr">{selMetrics.sunset}</span> · {dict.detail.dusk}{" "}
-              <span className="num" dir="ltr">{selMetrics.duskAstro}</span> · {dict.detail.moon}{" "}
-              {dict.detail.moonLit(Math.round(selMetrics.moonIllumination * 100))}
-            </p>
-          )}
-          <div className="mt-8">
-            {prefsMatch
-              ? <ExplainPanel slug={sel.slug} date={sel.date} prefs={prefs} forecastKey={JSON.stringify([data.forecastFetchedAt, selMetrics])} />
-              : <p className="small text-ink-2">{t.explainNeedsPlan}</p>}
-          </div>
-          <Link
-            href={`/destinations/${sel.slug}?night=${sel.date}&exp=${prefs.experience}`}
-            className="btn mt-8 inline-flex min-h-11 items-center font-medium"
-          >
-            {t.openChecklist}
-            <ArrowUpLeft aria-hidden size={18} className="direction-arrow" />
-          </Link>
-        </section>
-      )}
-
-      {prefs.date === "flexible" && <Matrix data={data} onSelect={onSelect} />}
+      {onBack && <button type="button" className="btn-quiet" onClick={onBack}>{backLabel}</button>}
     </div>
   );
 }
 
-function CloserOption({
-  data,
-  prefs,
-  onConfirm,
-}: {
-  data: PlanResponse;
-  prefs: PlanPrefs;
-  onConfirm: (hours: number) => void;
-}) {
+/** Two facts that matter most for the activity, from the forecast summary only. */
+function modeFacts(mode: Experience, m: NightSummary | undefined, locale: "ar" | "en") {
+  const ar = locale === "ar";
+  if (!m) return [];
+  return mode === "stars"
+    ? [
+        { label: ar ? "غيم" : "Cloud", value: m.meanCloud === null ? "—" : ltr(`${Math.round(m.meanCloud)}%`) },
+        { label: ar ? "ظلام بلا قمر" : "Moonless", value: ar ? arHoursOf(m.moonFreeDarkHours, m.darkHours) : `${Math.round(m.moonFreeDarkHours)} of ${Math.round(m.darkHours)} h` },
+        { label: ar ? "القمر" : "Moon", value: ltr(`${Math.round(m.moonIllumination * 100)}%`) },
+      ]
+    : [
+        { label: ar ? "أقوى هبة" : "Gust", value: m.maxGust === null ? "—" : `${Math.round(m.maxGust)} ${ar ? "كم/س" : "km/h"}` },
+        { label: ar ? "أول الليل" : "Evening", value: m.eveningTemp === null ? "—" : ltr(`${Math.round(m.eveningTemp)}°`) },
+        { label: ar ? "أبرد إحساس" : "Coldest feel", value: m.minFeels === null ? "—" : ltr(`${Math.round(m.minFeels)}°`) },
+      ];
+}
+
+function NoneInRange({ prefs, currentPrefs, onAdjustDrive }: { prefs: PlanPrefs; currentPrefs: PlanPrefs; onAdjustDrive: (hours: number) => void }) {
   const { dict } = useI18n();
   const t = dict.plan;
-  const [open, setOpen] = useState(false);
-  const proposedHours = Math.max(1, Math.round((prefs.maxDriveHours - 1) * 2) / 2);
-  const hasCloserDestinations = data.considered.some((slug) => {
-    const destination = getDestination(slug);
-    return destination && estimateDrive(destination).hours <= proposedHours;
-  });
-  const minimumReached = prefs.maxDriveHours <= 1;
-  const panelId = useId();
-
+  // Smallest half-hour step (within the slider's 1.5–5 h) that reaches at least one recommendable place.
+  const reachable = RECOMMENDABLE.filter((d) => d.experiences.includes(prefs.experience)).map((d) => estimateDrive(d).hours);
+  const nearestRaw = reachable.length ? Math.ceil(Math.min(...reachable) * 2) / 2 : null;
+  const nearestHours = nearestRaw !== null && nearestRaw > prefs.maxDriveHours && nearestRaw <= 5 ? Math.max(1.5, nearestRaw) : null;
   return (
-    <section className="mt-4">
-      <button
-        type="button"
-        className="btn-quiet disabled:opacity-50"
-        disabled={minimumReached}
-        aria-expanded={!minimumReached && open}
-        aria-controls={!minimumReached ? panelId : undefined}
-        onClick={() => setOpen((shown) => !shown)}
-      >
-        {t.closerAction}
-      </button>
-      {minimumReached && <p className="small mt-2 text-ink-2">{t.closerMinimum}</p>}
-      {!minimumReached && open && (
-        <div id={panelId} className="mt-3 border border-olive/20 bg-sand-2 p-4" aria-live="polite">
-          <p>{t.closerPrompt(prefs.maxDriveHours, proposedHours)}</p>
-          {!hasCloserDestinations && <p className="small mt-2 text-ink-2">{t.closerNone(proposedHours)}</p>}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {hasCloserDestinations && (
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  setOpen(false);
-                  onConfirm(proposedHours);
-                }}
-              >
-                {t.closerConfirm}
-              </button>
-            )}
-            <button type="button" className="btn-quiet" onClick={() => setOpen(false)}>
-              {t.closerCancel}
-            </button>
-          </div>
-        </div>
+    <div className="mt-6 bg-sand-2 p-6" role="status">
+      <p className="lead">{t.noneInRange}</p>
+      {samePlanPrefs(prefs, currentPrefs) && nearestHours !== null && (
+        <button type="button" className="btn mt-5" onClick={() => onAdjustDrive(nearestHours)}>{t.widenDrive(nearestHours)}</button>
       )}
-    </section>
+    </div>
   );
 }
 
-function Matrix({ data, onSelect }: { data: PlanResponse; onSelect: (k: string) => void }) {
+function SharePlanButton({ slug, night, prefs, dark = false }: { slug: string; night: string; prefs: PlanPrefs; dark?: boolean }) {
+  const { dict } = useI18n();
+  const [status, setStatus] = useState<"idle" | "copied" | "manual" | "invalid">("idle");
+  const [url, setUrl] = useState("");
+
+  const copyLink = async () => {
+    const link = buildPlanShareUrl(window.location.origin, slug, night, prefs);
+    if (!link) {
+      setStatus("invalid");
+      return;
+    }
+    setUrl(link);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(link);
+      setStatus("copied");
+    } catch {
+      setStatus("manual");
+    }
+  };
+
+  return (
+    <>
+      <button type="button" className={dark ? "btn-ghost-night" : "btn-quiet min-h-11"} onClick={copyLink}>
+        {dict.plan.shareLink}
+      </button>
+      {status === "copied" && <p role="status" className={`small ${dark ? "muted" : "text-olive"}`}>{dict.plan.shareCopied}</p>}
+      {status === "manual" && (
+        <div className="w-full basis-full">
+          <p className={`small mb-2 ${dark ? "muted" : "text-ink-2"}`}>{dict.plan.shareManual}</p>
+          <input
+            aria-label={dict.plan.shareManual}
+            className="field min-w-0 w-full text-start"
+            type="text"
+            dir="ltr"
+            readOnly
+            value={url}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        </div>
+      )}
+      {status === "invalid" && <p role="alert" className="small" style={{ color: dark ? "#f2b8a4" : "var(--color-poor)" }}>{dict.plan.shareInvalid}</p>}
+    </>
+  );
+}
+
+function Matrix({ data, selected, onSelect }: { data: PlanResponse; selected: string | null; onSelect: (k: string) => void }) {
   const { locale, dict } = useI18n();
   const byKey = new Map(data.results.map((r) => [`${r.slug}|${r.date}`, r] as const));
   const sites = [...data.considered].sort((a, b) => {
@@ -672,11 +824,14 @@ function Matrix({ data, onSelect }: { data: PlanResponse; onSelect: (k: string) 
     return { bg: "transparent", fg: "var(--color-ink-2)" };
   };
   return (
-    <section className="mt-14" aria-labelledby="matrix-heading">
-      <h3 id="matrix-heading" className="font-medium">
+    <section className="pb-6" aria-labelledby="matrix-heading">
+      <h3 id="matrix-heading" className="sr-only">
         {dict.plan.matrixTitle}
       </h3>
-      <p className="small mt-1 text-ink-2">{dict.plan.matrixCaption}</p>
+      <p className="small text-ink-2">{dict.plan.matrixCaption}</p>
+      {data.results.some((r) => r.dealbreakers.length > 0) && (
+        <p className="small mt-1 text-ink-2">{dict.plan.matrixCapLegend}</p>
+      )}
       <div className="mt-4 overflow-x-auto">
         <table className="num w-full min-w-[40rem] border-separate border-spacing-1 text-center">
           <thead>
@@ -700,17 +855,21 @@ function Matrix({ data, onSelect }: { data: PlanResponse; onSelect: (k: string) 
                   {data.nights.map((n) => {
                     const r = byKey.get(`${s}|${n}`);
                     const c = cell(r);
+                    const key = `${s}|${n}`;
+                    const isSelected = key === selected;
+                    const capped = !!r?.dealbreakers.length;
                     return (
                       <td key={n} className="p-0">
                         <button
                           type="button"
-                          onClick={() => r && onSelect(`${s}|${n}`)}
+                          onClick={() => r && onSelect(key)}
                           disabled={!r}
-                          aria-label={`${d.name[locale]} ${formatNight(n, locale)}: ${r?.score ?? dict.rating.unknown}`}
-                          className="small h-10 w-full transition-opacity hover:opacity-80"
+                          aria-pressed={isSelected}
+                          aria-label={`${d.name[locale]} ${formatNight(n, locale)}: ${r?.score ?? dict.rating.unknown}${capped ? `, ${dict.plan.matrixCapped}` : ""}`}
+                          className="night-matrix-choice small h-10 w-full transition-opacity hover:opacity-80"
                           style={{ background: c.bg, color: c.fg }}
                         >
-                          {r?.score ?? "·"}
+                          {r?.score ?? "·"}{capped && <sup aria-hidden="true">†</sup>}
                         </button>
                       </td>
                     );

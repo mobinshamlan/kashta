@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { MessageCircleQuestion } from "lucide-react";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { getDestination } from "@/lib/destinations";
 import { formatNight } from "@/lib/i18n";
@@ -41,6 +41,10 @@ interface ExplainPanelProps {
   forecastKey: string;
   onPacking?: (items: string[]) => void;
   dark?: boolean;
+  /** Narrow column: one list per row and a quieter button. */
+  compact?: boolean;
+  /** Button text, when the default "explain why" doesn't fit the context. */
+  label?: string;
 }
 
 export function ExplainPanel(props: ExplainPanelProps) {
@@ -58,6 +62,8 @@ function ExplainPanelContent({
   locale,
   onPacking,
   dark = false,
+  compact = false,
+  label,
 }: ExplainPanelProps & { locale: "ar" | "en" }) {
   const { dict } = useI18n();
   const ai = useAiStatus();
@@ -95,15 +101,14 @@ function ExplainPanelContent({
       <div className="flex flex-wrap items-center gap-4">
         <button
           type="button"
-          className="btn"
+          className={compact ? "helper-chip helper-ask" : "btn"}
           onClick={run}
           disabled={ai !== true || state.s === "loading"}
           aria-describedby={ai === false ? `ai-off-${slug}` : undefined}
         >
-          <Sparkles aria-hidden size={18} />
-          {state.s === "loading" ? dict.plan.explaining : dict.plan.explain}
+          <MessageCircleQuestion aria-hidden size={18} />
+          {state.s === "loading" ? dict.plan.explaining : label ?? dict.plan.explain}
         </button>
-        <span className={`text-xs ${muted}`}>{locale === "ar" ? "بمساعدة Llama" : "With Llama"}</span>
       </div>
       {ai === false && (
         <p id={`ai-off-${slug}`} className={`small mt-3 max-w-[56ch] ${muted}`}>
@@ -119,21 +124,21 @@ function ExplainPanelContent({
         </div>
       )}
       {state.s === "error" && <ErrorState className="mt-6" code={state.code} onRetry={run} />}
-      {state.s === "ok" && <ExplanationView data={state.data} dark={dark} locale={locale} />}
+      {state.s === "ok" && <ExplanationView data={state.data} dark={dark} locale={locale} compact={compact} />}
     </div>
   );
 }
 
-function ExplanationView({ data, dark, locale }: { data: ExplainResponse; dark: boolean; locale: "ar" | "en" }) {
+function ExplanationView({ data, dark, locale, compact = false }: { data: ExplainResponse; dark: boolean; locale: "ar" | "en"; compact?: boolean }) {
   const { dict } = useI18n();
   const e = data.explanation;
   const muted = dark ? "text-star-2" : "text-ink-2";
   const alt = e.alternative ? getDestination(e.alternative.slug) : undefined;
   return (
-    <article className={`mt-6 p-6 ${dark ? "bg-night-2" : "bg-sand-2"}`} lang={locale}>
-      <h3 className="lead font-light">{dict.plan.explainTitle}</h3>
-      {e.summary && <p className="lead mt-3 max-w-[56ch]">{e.summary}</p>}
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
+    <article className={`${compact ? "mt-4 rounded-xl p-4" : "mt-6 p-6"} ${dark ? "bg-night-2" : "bg-sand-2"}`} lang={locale}>
+      <h3 className={compact ? "font-medium" : "lead font-light"}>{dict.plan.explainTitle}</h3>
+      {e.summary && <p className={`${compact ? "mt-2" : "lead mt-3"} max-w-[56ch]`}>{e.summary}</p>}
+      <div className={`${compact ? "mt-4 grid gap-4" : "mt-6 grid gap-6 md:grid-cols-2"}`}>
         <ExplainList title={dict.plan.reasons} items={e.reasons} />
         <ExplainList title={dict.plan.cautions} items={e.cautions} />
         <ExplainList title={dict.plan.preparations} items={e.preparations} />
@@ -149,7 +154,7 @@ function ExplanationView({ data, dark, locale }: { data: ExplainResponse; dark: 
         </p>
       )}
       <p className={`small mt-6 ${muted}`}>
-        {dict.plan.explainNote} ({data.model})
+        {dict.plan.explainNote}
         {data.droppedForUngroundedNumbers > 0 && <span className="block">{dict.plan.dropped(data.droppedForUngroundedNumbers)}</span>}
       </p>
     </article>

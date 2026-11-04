@@ -1,5 +1,5 @@
 import "server-only";
-import { DESTINATIONS, estimateDrive } from "./destinations";
+import { DESTINATIONS, RECOMMENDABLE, estimateDrive } from "./destinations";
 import { upcomingNights } from "./nights";
 import { scoreNight } from "./score";
 import type { ForecastResponse, PlanResponse, NightSummary } from "./api-types";
@@ -45,7 +45,8 @@ export async function scoreDestinations(
 export function eligibleDestinations(prefs: PlanPrefs) {
   const considered: Destination[] = [];
   const excluded: string[] = [];
-  for (const d of DESTINATIONS) {
+  // Unverified places stay on their own pages but never enter a recommendation.
+  for (const d of RECOMMENDABLE) {
     if (!d.experiences.includes(prefs.experience)) continue;
     if (estimateDrive(d).hours <= prefs.maxDriveHours) considered.push(d);
     else excluded.push(d.slug);
