@@ -118,13 +118,14 @@ const inLanguage = (x: string, locale: Locale) => (locale === "ar" ? /[\u0600-\u
  */
 async function answer(text: string, locale: Locale, context: { slug: string; date: string; prefs: PlanPrefs } | null): Promise<string | null> {
   const plan = context ? await scorePlan(context.slug, context.date, context.prefs) : null;
-  const facts = plan && context
-    ? answerFacts(plan, context.prefs, locale)
-    : { selectedPlace: null, note: context ? "The selected night is no longer in the seven-day forecast; ask them to pick a new night." : "The user has not picked a place and night yet." };
+  const asksWhy = /(?:ليش|ليه|لماذا|\bwhy\b)/iu.test(text);
+  const full = plan && context ? answerFacts(plan, context.prefs, locale) : null;
+  if (full && asksWhy) delete (full.selectedNight as Partial<typeof full.selectedNight>).otherForecastDetails;
+  const facts = full ?? { selectedPlace: null, note: context ? "The selected night is no longer in the seven-day forecast; ask them to pick a new night." : "The user has not picked a place and night yet." };
   const language = locale === "ar" ? "Arabic (natural Saudi tone, not heavy slang)" : "English";
   const system = `You are KASHTA's trip assistant. KASHTA recommends an upcoming night and a verified place near Riyadh for a kashta (desert camping) or stargazing, from the forecast.
 Answer the user's question in ${language}, in at most three short sentences. Use ONLY the facts JSON below for anything about the selected place, night, forecast, drive, permit, ranking or packing.
-- "Why this place": in two short sentences, use whyThisPlace only: describe each mainReasons condition with its measured value and unit (evening/coldest °C, gust km/h, rain chance %, cloud %, dust µg/m³, moon-free dark hours), then, only if rankedFirstWithinDriveLimitThatNight is true, say it ranked first within the drive limit that night; otherwise say that scoredHigherThatNight fit better that night. Do not use otherForecastDetails for this. It is a forecast: say "expected".
+- "Why this place": in two short sentences, use whyThisPlace only: describe each mainReasons condition with its measured value and unit (evening/coldest °C, gust km/h, rain chance %, cloud %, dust µg/m³, moon-free dark hours), then, only if rankedFirstWithinDriveLimitThatNight is true, say it ranked first within the drive limit that night; otherwise say that scoredHigherThatNight fit better that night. Present "helped" conditions as reasons and a "held it back" condition as a caution, never as a plus. Do not use otherForecastDetails for this. It is a forecast: say "expected".
 - otherForecastDetails: use only when the user asks about a specific value.
 - A forecast value: say what it means for this night in plain words (for example 0% cloud means a clear sky is expected).
 - Packing: list packingChecklist.keyItems as written, then say the full list of totalItemsInPlan items is in the plan. Never add items.

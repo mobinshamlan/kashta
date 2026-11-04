@@ -2,7 +2,7 @@ import "server-only";
 import { buildChecklist } from "./checklist";
 import { DESTINATIONS, estimateDrive, getDestination, isRecommendable } from "./destinations";
 import { eligibleDestinations, scoreDestinations } from "./planner";
-import { nightReasons } from "./reasons";
+import { NEARBY_TIE_POINTS, nightReasons } from "./reasons";
 import type { Locale, NightScore, PlanPrefs } from "./types";
 
 /** The forecast and scoring facts for one place and night, in the names Llama is given. */
@@ -51,12 +51,18 @@ export async function scorePlan(slug: string, date: string, prefs: PlanPrefs) {
     .filter((s) => s.score !== null && !(s.slug === slug && s.date === date))
     .filter((s) => isRecommendable(getDestination(s.slug)!))
     .filter((s) => estimateDrive(getDestination(s.slug)!).hours <= prefs.maxDriveHours);
-  return { dest, chosen, alternatives: inReach.slice(0, 3), sameNight: inReach.filter((s) => s.date === date).slice(0, 3) };
+  // The night's pick follows the app's rule (rankNight): within NEARBY_TIE_POINTS of the top score, the nearest place wins.
+  const night = [chosen, ...inReach.filter((s) => s.date === date)].filter((s) => s.score !== null);
+  const top = Math.max(...night.map((s) => s.score!));
+  const hours = (s: NightScore) => estimateDrive(getDestination(s.slug)!).hours;
+  const pick = night.filter((s) => s.score! >= top - NEARBY_TIE_POINTS).sort((a, b) => hours(a) - hours(b) || b.score! - a.score!)[0];
+  const better = pick && pick !== chosen ? night.filter((s) => s !== chosen && s.score! > (chosen.score ?? -1)).slice(0, 3) : [];
+  return { dest, chosen, alternatives: inReach.slice(0, 3), isPick: pick === chosen, better };
 }
 
 /** Everything the assistant may say about the selected plan: forecast, ranking, drive, permit and checklist. */
 export function answerFacts(plan: NonNullable<Awaited<ReturnType<typeof scorePlan>>>, prefs: PlanPrefs, locale: Locale) {
-  const { dest, chosen, sameNight } = plan;
+  const { dest, chosen, isPick, better } = plan;
   const drive = estimateDrive(dest);
   const name = (slug: string) => DESTINATIONS.find((d) => d.slug === slug)!.name[locale];
   // A chat answer names a few items; the plan keeps the full list. The permit and this night's
@@ -86,8 +92,8 @@ export function answerFacts(plan: NonNullable<Awaited<ReturnType<typeof scorePla
     },
     whyThisPlace: {
       mainReasons: reasons,
-      rankedFirstWithinDriveLimitThatNight: !sameNight.some((s) => s.score! > (chosen.score ?? -1)),
-      scoredHigherThatNight: sameNight.filter((s) => s.score! > (chosen.score ?? -1)).map((s) => name(s.slug)),
+      rankedFirstWithinDriveLimitThatNight: isPick,
+      scoredHigherThatNight: better.map((s) => name(s.slug)),
     },
     howKashtaChooses: "Every place within the drive limit is scored per night from the forecast (temperature, wind, rain, dust, clouds and, for stargazing, moonlight), weighted by the group's preferences. The highest score is recommended.",
     packingChecklist: { keyItems: keyItems.map((i) => i.label[locale]), totalItemsInPlan: checklist.length },
