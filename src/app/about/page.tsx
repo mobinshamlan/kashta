@@ -55,8 +55,8 @@ export default async function AboutPage() {
     {
       Icon: Car,
       text: ar
-        ? "المشوار تقدير: المسافة المباشرة من وسط الرياض × 1.3 على 90 كم/س. مو مسار ملاحة."
-        : "Drive times are estimates: straight-line distance from central Riyadh × 1.3 at 90 km/h. Not a navigation route.",
+        ? "المشوار تقدير: المسافة المباشرة من مدينة الانطلاق × 1.3 على 90 كم/س. مو مسار ملاحة."
+        : "Drive times are estimates: straight-line distance from your starting city × 1.3 at 90 km/h. Not a navigation route.",
     },
     { Icon: SunDim, text: dict.stars.noLight },
     {
@@ -226,8 +226,8 @@ export default async function AboutPage() {
               </div>
               <p className="small mt-4 text-ink-2">
                 {ar
-                  ? "الليلة تمتد من 6 مساءً إلى 5 فجرًا بتوقيت الرياض. نعتمد قياسًا فقط إذا توفر لنصف ساعات الليلة على الأقل."
-                  : "A night runs from 6 pm to 5 am Riyadh time. A measurement counts only if at least half the night's hours have it."}
+                  ? "الليلة تمتد من 6 مساءً إلى 5 فجرًا بتوقيت السعودية. نعتمد قياسًا فقط إذا توفر لنصف ساعات الليلة على الأقل."
+                  : "A night runs from 6 pm to 5 am Saudi time. A measurement counts only if at least half the night's hours have it."}
               </p>
             </div>
           </details>
@@ -263,8 +263,8 @@ export default async function AboutPage() {
                 <dt className="font-medium">{ar ? "المواقع" : "Sites"}</dt>
                 <dd className="mt-1 max-w-[62ch] text-ink-2">
                   {ar
-                    ? "مواقع منطقة الرياض وطاقتها ونقاط دخولها من دليل التخييم والكرفانات في مواقع الغطاء النباتي 2025 الصادر عن المركز الوطني لتنمية الغطاء النباتي ومكافحة التصحر."
-                    : "Riyadh-region sites, capacities and entry points come from the NCVC Camping and Caravan Guide in Vegetation Cover Areas 2025."}
+                    ? "مواقع المخيمات في المملكة وطاقتها ونقاط دخولها من دليل التخييم والكرفانات في مواقع الغطاء النباتي 2025 الصادر عن المركز الوطني لتنمية الغطاء النباتي ومكافحة التصحر."
+                    : "Campsite locations, capacities and entry points across Saudi Arabia come from the NCVC Camping and Caravan Guide in Vegetation Cover Areas 2025."}
                   <span className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
                     <a className="link" href={NCVC_GUIDE_AR} target="_blank" rel="noopener">{ar ? "الدليل (عربي)" : "Guide (Arabic)"}</a>
                     <a className="link" href={NCVC_GUIDE_EN} target="_blank" rel="noopener">{ar ? "الدليل (إنجليزي)" : "Guide (English)"}</a>

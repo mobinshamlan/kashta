@@ -2,6 +2,7 @@ import { hasInternalKey, collectNumbers, extractJson, keepGrounded } from "@/lib
 import { DESTINATIONS, estimateDrive, getDestination } from "@/lib/destinations";
 import { apiError, fromException, privateJson, rateLimited, readJson } from "@/lib/http";
 import { chatLlama, llamaConfig } from "@/lib/llm";
+import { DICTS } from "@/lib/i18n";
 import { factsFor, scorePlan } from "@/lib/plan-facts";
 import { explainRequestSchema, explanationSchema } from "@/lib/schemas";
 
@@ -25,7 +26,8 @@ export async function POST(request: Request) {
         slug,
         name: dest.name[locale],
         governorate: dest.governorate[locale],
-        approxDriveHoursFromRiyadh: estimateDrive(dest).hours,
+        approxDriveHoursFromStart: estimateDrive(dest, prefs.city).hours,
+        startCity: DICTS[locale].common.cities[prefs.city],
         terrain: dest.terrain,
       },
       group: { people: prefs.groupSize, experience: prefs.experience, tempPref: prefs.tempPref, windTolerance: prefs.windTolerance, priorities: prefs.priorities },
@@ -39,7 +41,7 @@ export async function POST(request: Request) {
 
     const inLanguage = (x: string) => (locale === "ar" ? /[\u0600-\u06FF]/u.test(x) && !/[A-Za-z]{4,}/u.test(x) : !/[\u0600-\u06FF]/u.test(x));
     const language = locale === "ar" ? "Arabic (natural Saudi tone, not heavy slang)" : "English";
-    const system = `You are KASHTA's trip assistant for desert camping near Riyadh.
+    const system = `You are KASHTA's trip assistant for desert camping in Saudi Arabia.
 Write in ${language}. Use ONLY the facts in the JSON the user sends. Rules:
 - Quote numbers exactly as given; never invent or estimate any measurement, distance, time or score.
 - Do not say anything about whether camping is legal or permitted; the app shows official permit information separately.

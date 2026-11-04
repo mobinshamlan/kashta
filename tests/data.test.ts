@@ -4,6 +4,7 @@ import { buildChecklist } from "../src/lib/checklist";
 import { DESTINATIONS, estimateDrive } from "../src/lib/destinations";
 import { DICTS } from "../src/lib/i18n";
 import { PHOTOS } from "../src/lib/photos";
+import { CITY_IDS } from "../src/lib/types";
 import { interpretedPrefsSchema, planPrefsSchema } from "../src/lib/schemas";
 
 test("every destination has a source, a dated permit and a real photo", () => {
@@ -11,20 +12,23 @@ test("every destination has a source, a dated permit and a real photo", () => {
   for (const d of DESTINATIONS) {
     assert.ok(!slugs.has(d.slug), `duplicate ${d.slug}`);
     slugs.add(d.slug);
-    assert.ok(d.lat > 20 && d.lat < 28 && d.lon > 42 && d.lon < 50, `${d.slug} outside central Saudi Arabia`);
+    assert.ok(d.lat > 16 && d.lat < 32 && d.lon > 34 && d.lon < 56, `${d.slug} outside Saudi Arabia`);
     assert.match(d.permit.sourceUrl, /^https:\/\//);
     assert.match(d.permit.checkedOn, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(d.sources.length > 0);
     assert.ok(PHOTOS[d.photo], `missing photo ${d.photo}`);
     if (d.permit.status !== "unverified") assert.match(d.permit.sourceUrl, /ncvc\.gov\.sa/);
   }
-  assert.ok(DESTINATIONS.length >= 10 && DESTINATIONS.length <= 15);
+  assert.ok(DESTINATIONS.length >= 60 && DESTINATIONS.length <= 70);
 });
 
-test("drive estimate is positive and plausible", () => {
-  for (const d of DESTINATIONS) {
-    const e = estimateDrive(d);
-    assert.ok(e.hours > 0.5 && e.hours < 6, `${d.slug} ${e.hours}h`);
+test("drive estimate is positive and plausible from every starting city", () => {
+  for (const city of CITY_IDS) {
+    for (const d of DESTINATIONS) {
+      const e = estimateDrive(d, city);
+      // Far pairs (say Jeddah to Al-Ahsa) exceed the planner's limit and are simply not offered; the estimate itself stays sane.
+      assert.ok(e.hours > 0 && e.hours < 24, `${d.slug} from ${city} ${e.hours}h`);
+    }
   }
 });
 
@@ -38,7 +42,8 @@ test("plan input validation rejects bad values", () => {
   const ok = { experience: "kashta", city: "riyadh", date: "flexible", groupSize: 5, maxDriveHours: 3, tempPref: "mild", windTolerance: "medium", priorities: [] };
   assert.ok(planPrefsSchema.safeParse(ok).success);
   assert.ok(!planPrefsSchema.safeParse({ ...ok, groupSize: 0 }).success);
-  assert.ok(!planPrefsSchema.safeParse({ ...ok, city: "jeddah" }).success);
+  assert.ok(planPrefsSchema.safeParse({ ...ok, city: "jeddah" }).success);
+  assert.ok(!planPrefsSchema.safeParse({ ...ok, city: "paris" }).success);
   assert.ok(!planPrefsSchema.safeParse({ ...ok, priorities: ["temp", "wind", "rain", "dust"] }).success);
   assert.ok(!planPrefsSchema.safeParse({ ...ok, date: "tomorrow" }).success);
 });

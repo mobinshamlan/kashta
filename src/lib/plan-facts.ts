@@ -1,6 +1,7 @@
 import "server-only";
 import { buildChecklist } from "./checklist";
-import { DESTINATIONS, estimateDrive, getDestination, isRecommendable } from "./destinations";
+import { DICTS } from "./i18n";
+import { DESTINATIONS, DRIVE_MAX_HOURS, estimateDrive, getDestination, isRecommendable } from "./destinations";
 import { eligibleDestinations, scoreDestinations } from "./planner";
 import { NEARBY_TIE_POINTS, nightReasons } from "./reasons";
 import type { Locale, NightScore, PlanPrefs } from "./types";
@@ -42,7 +43,7 @@ export function factsFor(s: NightScore) {
 export async function scorePlan(slug: string, date: string, prefs: PlanPrefs) {
   const dest = getDestination(slug);
   if (!dest) return null;
-  const { considered } = eligibleDestinations({ ...prefs, maxDriveHours: 6 });
+  const { considered } = eligibleDestinations({ ...prefs, maxDriveHours: DRIVE_MAX_HOURS });
   const pool = considered.some((d) => d.slug === slug) ? considered : [...considered, dest];
   const { scores } = await scoreDestinations({ ...prefs, date: "flexible" }, pool);
   const chosen = scores.find((s) => s.slug === slug && s.date === date);
@@ -50,11 +51,11 @@ export async function scorePlan(slug: string, date: string, prefs: PlanPrefs) {
   const inReach = scores
     .filter((s) => s.score !== null && !(s.slug === slug && s.date === date))
     .filter((s) => isRecommendable(getDestination(s.slug)!))
-    .filter((s) => estimateDrive(getDestination(s.slug)!).hours <= prefs.maxDriveHours);
+    .filter((s) => estimateDrive(getDestination(s.slug)!, prefs.city).hours <= prefs.maxDriveHours);
   // The night's pick follows the app's rule (rankNight): within NEARBY_TIE_POINTS of the top score, the nearest place wins.
   const night = [chosen, ...inReach.filter((s) => s.date === date)].filter((s) => s.score !== null);
   const top = Math.max(...night.map((s) => s.score!));
-  const hours = (s: NightScore) => estimateDrive(getDestination(s.slug)!).hours;
+  const hours = (s: NightScore) => estimateDrive(getDestination(s.slug)!, prefs.city).hours;
   const pick = night.filter((s) => s.score! >= top - NEARBY_TIE_POINTS).sort((a, b) => hours(a) - hours(b) || b.score! - a.score!)[0];
   const better = pick && pick !== chosen ? night.filter((s) => s !== chosen && s.score! > (chosen.score ?? -1)).slice(0, 3) : [];
   return { dest, chosen, alternatives: inReach.slice(0, 3), isPick: pick === chosen, better };
@@ -63,7 +64,7 @@ export async function scorePlan(slug: string, date: string, prefs: PlanPrefs) {
 /** Everything the assistant may say about the selected plan: forecast, ranking, drive, permit and checklist. */
 export function answerFacts(plan: NonNullable<Awaited<ReturnType<typeof scorePlan>>>, prefs: PlanPrefs, locale: Locale) {
   const { dest, chosen, isPick, better } = plan;
-  const drive = estimateDrive(dest);
+  const drive = estimateDrive(dest, prefs.city);
   const name = (slug: string) => DESTINATIONS.find((d) => d.slug === slug)!.name[locale];
   // A chat answer names a few items; the plan keeps the full list. The permit and this night's
   // weather or sky items lead, then the basics.
@@ -78,7 +79,7 @@ export function answerFacts(plan: NonNullable<Awaited<ReturnType<typeof scorePla
       name: dest.name[locale],
       governorate: dest.governorate[locale],
       terrain: dest.terrain,
-      estimatedDriveFromRiyadh: { hours: drive.hours, roadKm: drive.roadKm, note: "rough estimate, not a routed travel time" },
+      estimatedDriveFromStart: { startCity: DICTS[locale].common.cities[prefs.city], hours: drive.hours, roadKm: drive.roadKm, note: "rough estimate, not a routed travel time" },
       permit: { status: dest.permit.status, notes: dest.permit.notes[locale], checkedOn: dest.permit.checkedOn },
     },
     group: { people: prefs.groupSize, activity: prefs.experience, tempPref: prefs.tempPref, windTolerance: prefs.windTolerance, maxDriveHours: prefs.maxDriveHours, priorities: prefs.priorities },

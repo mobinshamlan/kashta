@@ -74,7 +74,7 @@ export function SevenNights({
               onClick={() => best && onSelect(night)}
             >
               {isBest && <span className="seven-best-tag" aria-hidden>{dict.home.sevenBest}</span>}
-              <span className="seven-day" aria-hidden>
+              <span className="seven-day w-full min-w-0" aria-hidden>
                 <span className="seven-weekday font-medium">{i === 0 ? dict.common.tonight : formatWeekday(night, locale)}</span>
                 <span className="block muted num whitespace-nowrap sm:hidden">{Number(night.slice(8))}</span>
                 <span className="hidden muted num whitespace-nowrap sm:block">{formatDayMonth(night, locale)}</span>
@@ -109,10 +109,7 @@ function factorList(factors: Factor[], locale: "ar" | "en", names: Record<Factor
   return new Intl.ListFormat(locale === "ar" ? "ar" : "en", { type: "conjunction" }).format(words);
 }
 
-/**
- * What the bars mean for this week, under the chart. Unscored nights are named with the factor
- * the forecast doesn't reach yet, so missing data is never mistaken for poor conditions.
- */
+/** Counts the nights with a usable score and keeps the reason for incomplete nights close by. */
 export function WeekLegend({ nights, mode, tap = false, className = "" }: { nights: NightPick[]; mode: Experience; tap?: boolean; className?: string }) {
   const { locale, dict } = useI18n();
   const t = dict.home;
@@ -125,9 +122,12 @@ export function WeekLegend({ nights, mode, tap = false, className = "" }: { nigh
       <li><span className="week-legend-bar" aria-hidden />{t.weekBars[mode]}{tap ? ` ${t.weekTap}` : ""}</li>
       {anyPoor && <li><span className="week-legend-bar week-legend-bar--poor" aria-hidden />{t.weekPoor}</li>}
       {incomplete.length > 0 && (
-        <li>
+        <li className="week-legend-more">
           <span className="week-legend-na" aria-hidden />
-          <span>{missing.length ? t.weekMissing(days, factorList(missing, locale, dict.factor)) : t.weekIncomplete}</span>
+          <details>
+            <summary>{t.weekMissingSummary(incomplete.length)}</summary>
+            <p className="mt-1">{missing.length ? t.weekMissing(days, factorList(missing, locale, dict.factor)) : t.weekIncomplete}</p>
+          </details>
         </li>
       )}
     </ul>

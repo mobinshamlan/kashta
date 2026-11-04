@@ -6,17 +6,18 @@ import { ArrowUpLeft, ChevronDown, ChevronLeft, ChevronRight, Compass, Flame, Lo
 import { rememberPlanForecasts } from "@/lib/forecast-storage";
 import type { NightSummary, PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
-import { RECOMMENDABLE, getDestination, estimateDrive } from "@/lib/destinations";
+import { DRIVE_MAX_HOURS, DRIVE_MIN_HOURS, RECOMMENDABLE, getDestination, estimateDrive } from "@/lib/destinations";
 import { formatNight, formatWeekday, approxHours, arHoursOf, ltr } from "@/lib/i18n";
-import { bestPerNight, nightReasons } from "@/lib/reasons";
+import { bestPerNight, nightReasons, rankNight } from "@/lib/reasons";
 import { DEFAULT_PREFS, loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import type { InterpretedPrefs } from "@/lib/schemas";
 import { rating } from "@/lib/score";
 import { buildPlanShareUrl, type SharedPlan } from "@/lib/share-link";
-import type { Experience, Factor, PlanPrefs } from "@/lib/types";
+import type { CityId, Experience, Factor, PlanPrefs } from "@/lib/types";
 import { ExplainPanel, useAiStatus } from "./explain-panel";
 import { useI18n } from "./locale-provider";
-import { CoverageMap } from "./coverage-map";
+import { CityPicker } from "./city-picker";
+import { PlacesMap } from "./places-map";
 import { NightScene } from "./night-scene";
 import { NightWindow } from "./night-window";
 import { PlanRail } from "./plan-rail";
@@ -24,7 +25,7 @@ import { RecommendationCard, ReasonList } from "./recommendation-card";
 import { SevenNights, WeekLegend } from "./seven-nights";
 import { ErrorState, FactorBars, RATING_COLOR, Skeleton } from "./ui";
 
-type Field = keyof Omit<PlanPrefs, "city">;
+type Field = keyof PlanPrefs;
 
 const PRIORITY_OPTIONS: Factor[] = ["temp", "wind", "rain", "dust", "clouds", "moon"];
 
@@ -64,6 +65,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
     { s: "idle" } | { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: PlanResponse; prefs: PlanPrefs; refreshing?: boolean; refreshError?: ClientErrorCode }
   >(initialShare ? { s: "loading" } : { s: "idle" });
   const [selected, setSelected] = useState<string | null>(null);
+  const [mapHover, setMapHover] = useState<string | null>(null);
   // The sequence: activity → night → place → plan. Fetching always covers all seven nights.
   const [step, setStep] = useState<1 | 2 | 3 | 4>(initialShare || (initialNight && initialPlace) ? 4 : initialExperience ? 2 : 1);
   const [night, setNight] = useState<string | null>(initialShare?.night ?? initialNight ?? null);
@@ -124,6 +126,10 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
       next.groupSize = got.groupSize;
       changed.add("groupSize");
     }
+    if (got.city) {
+      next.city = got.city;
+      changed.add("city");
+    }
     if (got.tempPref) {
       next.tempPref = got.tempPref;
       changed.add("tempPref");
@@ -133,7 +139,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
       changed.add("windTolerance");
     }
     if (got.maxDriveHours) {
-      next.maxDriveHours = Math.min(5, Math.max(1.5, Math.round(got.maxDriveHours * 2) / 2));
+      next.maxDriveHours = Math.min(DRIVE_MAX_HOURS, Math.max(DRIVE_MIN_HOURS, Math.round(got.maxDriveHours * 2) / 2));
       changed.add("maxDriveHours");
     }
     if (got.date) {
@@ -155,6 +161,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
   const appliedLabel = (f: Field): string => {
     switch (f) {
       case "experience": return dict.experience[prefs.experience];
+      case "city": return dict.common.cities[prefs.city];
       case "date": return night ? formatNight(night, locale) : t.flexible;
       case "groupSize": return `${t.groupLabel}: ${prefs.groupSize}`;
       case "maxDriveHours": return t.driveValue(prefs.maxDriveHours);
@@ -167,10 +174,11 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
   const interpretedSummary = (got: InterpretedPrefs) => {
     const parts: string[] = [];
     if (got.experience) parts.push(t.experienceLabel + ": " + dict.experience[got.experience]);
+    if (got.city) parts.push(t.cityLegend + " " + dict.common.cities[got.city]);
     if (got.groupSize) parts.push(t.groupLabel + ": " + got.groupSize);
     if (got.date) parts.push(t.dateLabel + ": " + (got.date === "flexible" ? t.flexible : formatNight(got.date, locale)));
     if (got.maxDriveHours) {
-      const driveHours = Math.min(5, Math.max(1.5, Math.round(got.maxDriveHours * 2) / 2));
+      const driveHours = Math.min(DRIVE_MAX_HOURS, Math.max(DRIVE_MIN_HOURS, Math.round(got.maxDriveHours * 2) / 2));
       parts.push(t.driveLabel + ": " + t.driveValue(driveHours));
     }
     if (got.tempPref) parts.push(t.tempLabel + ": " + dict.temp[got.tempPref]);
@@ -227,7 +235,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
 
     const restored = { ...(initialExperience ? { ...stored, experience: initialExperience } : stored), date: "flexible" };
     // The drive slider starts at 1.5 h: below that no listed place is reachable.
-    const restoredPrefs = { ...restored, maxDriveHours: Math.max(1.5, restored.maxDriveHours) };
+    const restoredPrefs = { ...restored, maxDriveHours: Math.max(DRIVE_MIN_HOURS, restored.maxDriveHours) };
     setPrefs(restoredPrefs);
     // Show a useful result straight away; every preference already has a default.
     if (startedShareRef.current !== "auto") {
@@ -262,7 +270,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
 
   // Derived for the steps: nights compared, the chosen night, the places for it, the chosen place.
   const data = plan.s === "ok" ? plan.data : null;
-  const perNight = data ? bestPerNight(data) : [];
+  const perNight = data ? bestPerNight(data, prefs.city) : [];
   const bestNight = perNight.reduce<string | null>((top, n) => {
     if (!n.best) return top;
     const current = perNight.find((x) => x.night === top)?.best?.score ?? -1;
@@ -271,12 +279,15 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
   // A night only counts while the forecast scores it (an address, share or helper may name another).
   const chosenNight = night && perNight.some((n) => n.night === night && n.best) ? night : bestNight;
   const nightRows: ScoreRow[] = data && chosenNight
-    ? data.results.filter((r) => r.date === chosenNight && r.score !== null).sort((a, b) => b.score! - a.score!)
+    ? rankNight(data, chosenNight, prefs.city)
     : [];
   const pickForNight = perNight.find((n) => n.night === chosenNight)?.best;
   const selectedRow = data?.results.find((r) => `${r.slug}|${r.date}` === selected && r.date === chosenNight);
   const chosenRow = selectedRow ?? pickForNight ?? nightRows[0];
   const chosenDest = chosenRow ? getDestination(chosenRow.slug) : undefined;
+  // The short list the cards and the map share: the top four, plus the chosen place if it ranks lower.
+  const placeRows = chosenRow && !nightRows.slice(0, 4).some((r) => r.slug === chosenRow.slug) ? [...nightRows.slice(0, 4), chosenRow] : nightRows.slice(0, 4);
+  const placeRank = (slug: string) => nightRows.findIndex((r) => r.slug === slug) + 1;
   const metricsFor = (n: string) => {
     if (!data) return undefined;
     const row = perNight.find((x) => x.night === n)?.best ?? data.results.find((r) => r.date === n);
@@ -297,7 +308,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
     }
     if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
   }, [data, prefs.experience, step, chosenRow]);
-  const placeHref = (row: ScoreRow) => `/destinations/${row.slug}?night=${row.date}&exp=${prefs.experience}`;
+  const placeHref = (row: ScoreRow) => `/destinations/${row.slug}?night=${row.date}&exp=${prefs.experience}&city=${prefs.city}`;
 
   /** "Start over": default preferences (the current activity stays selected), no night, place or
    *  description, back to step 1. Checklist ticks and fetched forecasts are untouched. */
@@ -320,6 +331,14 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
     setStep(next);
     requestAnimationFrame(() => stepRef.current?.focus());
   };
+  /** A new start city changes every drive, so the week is scored again; the night stays if it still can. */
+  const changeCity = (city: CityId) => {
+    const next = { ...prefs, city };
+    setPrefs(next);
+    savePrefs(next);
+    setSelected(null);
+    void submit(next);
+  };
   const pickMode = (experience: Experience) => {
     if (experience !== prefs.experience) {
       setSelected(null);
@@ -329,7 +348,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
   };
 
   const STEPS = [
-    { n: 1, label: t.steps.activity, value: dict.experience[prefs.experience] },
+    { n: 1, label: t.steps.activity, value: `${dict.experience[prefs.experience]} · ${dict.common.cities[prefs.city]}` },
     { n: 2, label: t.steps.night, value: chosenNight ? formatNight(chosenNight, locale, { short: true }) : "—" },
     { n: 3, label: t.steps.place, value: chosenDest?.name[locale] ?? "—" },
   ] as const;
@@ -453,15 +472,15 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
           <input
             id={`${formId}-drive`}
             type="range"
-            min={1.5}
-            max={5}
+            min={DRIVE_MIN_HOURS}
+            max={DRIVE_MAX_HOURS}
             step={0.5}
             value={prefs.maxDriveHours}
             aria-valuetext={approxHours(prefs.maxDriveHours, locale)}
             onChange={(e) => update("maxDriveHours", Number(e.target.value))}
             className="h-11 w-full accent-[var(--color-clay)]"
           />
-          <p className="small text-ink-2">{t.from}. {dict.common.estimateNote}.</p>
+          <p className="small text-ink-2">{t.driveFrom(dict.common.cities[prefs.city])}. {dict.common.estimateNote}.</p>
         </div>
 
         <details className="faq-item" open={applied.has("tempPref") || applied.has("windTolerance") || applied.has("priorities") || undefined}>
@@ -561,6 +580,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
                 </label>
               ))}
             </div>
+            <CityPicker className="mt-6" tone="sand" value={prefs.city} onChange={changeCity} experience={prefs.experience} maxDriveHours={prefs.maxDriveHours} />
             {helper}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button type="button" className="btn plan-go" onClick={() => goTo(2)}>{t.toNight}</button>
@@ -611,7 +631,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
               <fieldset>
                 <legend className="sr-only">{t.placeTitle}</legend>
                 <div className="grid gap-3 md:grid-cols-2">
-                  {nightRows.slice(0, 4).map((r) => {
+                  {placeRows.map((r) => {
                     const d = getDestination(r.slug)!;
                     const rt = rating(r.score);
                     const on = chosenRow?.slug === r.slug;
@@ -619,6 +639,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
                     return (
                       <label key={r.slug} className="place-option !items-start">
                         <input type="radio" name="plan-place" value={r.slug} checked={on} onChange={() => setSelected(`${r.slug}|${r.date}`)} />
+                        <span className="place-num num" aria-hidden data-rating={rt}>{placeRank(r.slug)}</span>
                         <span className="min-w-0">
                           <span className="flex flex-wrap items-center gap-2 font-medium">
                             {d.name[locale]}
@@ -626,7 +647,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
                           </span>
                           <ReasonList className="small mt-2" reasons={reason} />
                           <span className="small mt-2 flex flex-wrap gap-x-3 text-ink-2">
-                            <span title={dict.common.estimateNote}><bdi className="num">{approxHours(estimateDrive(d).hours, locale)}</bdi></span>
+                            <span title={dict.common.estimateNote}><bdi className="num">{approxHours(estimateDrive(d, prefs.city).hours, locale)}</bdi></span>
                             <span>{dict.permit.short[d.permit.status]}</span>
                           </span>
                         </span>
@@ -654,7 +675,18 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
               <details className="faq-item">
                 <summary>{t.onMap}</summary>
                 <div className="pb-5">
-                  <CoverageMap compact legend={false} scores={Object.fromEntries(RECOMMENDABLE.map((d) => [d.slug, nightRows.find((r) => r.slug === d.slug)?.score ?? null]))} pick={chosenRow?.slug} mode={prefs.experience} />
+                  <PlacesMap
+                    city={prefs.city}
+                    mode={prefs.experience}
+                    scores={Object.fromEntries(nightRows.map((r) => [r.slug, r.score]))}
+                    numbered={placeRows.map((r) => r.slug)}
+                    ranks={Object.fromEntries(placeRows.map((r) => [r.slug, placeRank(r.slug)]))}
+                    selected={chosenRow?.slug ?? null}
+                    hovered={mapHover}
+                    onSelect={(slug) => chosenNight && setSelected(`${slug}|${chosenNight}`)}
+                    onHover={setMapHover}
+                    label={t.onMap}
+                  />
                 </div>
               </details>
             )}
@@ -750,9 +782,9 @@ function NoneInRange({ prefs, currentPrefs, onAdjustDrive }: { prefs: PlanPrefs;
   const { dict } = useI18n();
   const t = dict.plan;
   // Smallest half-hour step (within the slider's 1.5–5 h) that reaches at least one recommendable place.
-  const reachable = RECOMMENDABLE.filter((d) => d.experiences.includes(prefs.experience)).map((d) => estimateDrive(d).hours);
+  const reachable = RECOMMENDABLE.filter((d) => d.experiences.includes(prefs.experience)).map((d) => estimateDrive(d, prefs.city).hours);
   const nearestRaw = reachable.length ? Math.ceil(Math.min(...reachable) * 2) / 2 : null;
-  const nearestHours = nearestRaw !== null && nearestRaw > prefs.maxDriveHours && nearestRaw <= 5 ? Math.max(1.5, nearestRaw) : null;
+  const nearestHours = nearestRaw !== null && nearestRaw > prefs.maxDriveHours && nearestRaw <= DRIVE_MAX_HOURS ? Math.max(DRIVE_MIN_HOURS, nearestRaw) : null;
   return (
     <div className="mt-6 bg-sand-2 p-6" role="status">
       <p className="lead">{t.noneInRange}</p>

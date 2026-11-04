@@ -7,7 +7,7 @@ import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { getDestination } from "@/lib/destinations";
 import { formatNight } from "@/lib/i18n";
 import type { Explanation } from "@/lib/schemas";
-import type { PlanPrefs } from "@/lib/types";
+import type { CityId, PlanPrefs } from "@/lib/types";
 import { useI18n } from "./locale-provider";
 import { ErrorState } from "./ui";
 
@@ -124,12 +124,12 @@ function ExplainPanelContent({
         </div>
       )}
       {state.s === "error" && <ErrorState className="mt-6" code={state.code} onRetry={run} />}
-      {state.s === "ok" && <ExplanationView data={state.data} dark={dark} locale={locale} compact={compact} />}
+      {state.s === "ok" && <ExplanationView data={state.data} dark={dark} locale={locale} compact={compact} city={prefs.city} />}
     </div>
   );
 }
 
-function ExplanationView({ data, dark, locale, compact = false }: { data: ExplainResponse; dark: boolean; locale: "ar" | "en"; compact?: boolean }) {
+function ExplanationView({ data, dark, locale, city, compact = false }: { data: ExplainResponse; dark: boolean; locale: "ar" | "en"; city: CityId; compact?: boolean }) {
   const { dict } = useI18n();
   const e = data.explanation;
   const muted = dark ? "text-star-2" : "text-ink-2";
@@ -147,7 +147,7 @@ function ExplanationView({ data, dark, locale, compact = false }: { data: Explai
       {e.alternative && alt && (
         <p className="mt-6">
           <span className="font-medium">{dict.plan.alternative}: </span>
-          <Link className="link" href={`/destinations/${alt.slug}?night=${e.alternative.date}`}>
+          <Link className="link" href={`/destinations/${alt.slug}?night=${e.alternative.date}&city=${city}`}>
             {alt.name[locale]} — {formatNight(e.alternative.date, locale)}
           </Link>
           {e.alternative.why && <span className="block mt-1">{e.alternative.why}</span>}
