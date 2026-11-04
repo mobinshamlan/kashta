@@ -266,6 +266,7 @@ const ar = {
       caution: "انتبه:",
       factsUsed: "الأرقام اللي اعتمدت عليها:",
       answerFallback: (place: string) => `ما قدرت أصيغ رد دقيق، بس هذي أسباب اختيار ${place} من أرقام التوقعات:`,
+      whyPicked: (place: string, night: string) => `اخترت ${place} ليلة ${night} لأن التوقعات فيها:`,
       answerNoPlan: "اختر مكان وليلة أول، وأجاوبك من بياناتها.",
     },
     helper: {
@@ -821,6 +822,7 @@ const en: Dict = {
       caution: "Watch out:",
       factsUsed: "Numbers this is based on:",
       answerFallback: (place: string) => `I couldn't word a precise answer, but here's why ${place} was picked, from the forecast:`,
+      whyPicked: (place: string, night: string) => `I picked ${place} for ${night} because the forecast shows:`,
       answerNoPlan: "Pick a place and night first, and I'll answer from its data.",
     },
     helper: {
