@@ -229,12 +229,18 @@ export function CoverageMap({
               );
             })}
           </ol>
-          <p className="small mt-4 max-w-[52ch] text-ink-2">{locale === "ar" ? "النقاط من إحداثيات نقاط الدخول المنشورة، وما فيه طرق مرسومة." : "Dots are published entry points; no roads are drawn."}</p>
+          <details className="coverage-map-note mt-4 small text-ink-2">
+            <summary>{dict.map.details}</summary>
+            <p className="mt-2 max-w-[52ch]">{dict.map.note}</p>
+          </details>
         </figcaption>
       )}
       {!showList && (
         <figcaption className="small max-w-[52ch] text-ink-2">
-          <span className="block">{locale === "ar" ? "النقاط من إحداثيات نقاط الدخول المنشورة، وما فيه طرق مرسومة." : "Dots are published entry points; no roads are drawn."}</span>
+          <details className="coverage-map-note">
+            <summary>{dict.map.details}</summary>
+            <p className="mt-2">{dict.map.note}</p>
+          </details>
         </figcaption>
       )}
     </figure>

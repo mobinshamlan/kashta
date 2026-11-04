@@ -94,13 +94,15 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     setText("");
     setShowExamples(false);
     setBusy("interpret");
-    const res = await callApi<{ prefs: InterpretedPrefs; unsupported?: string[] }>("/api/ai/interpret", { method: "POST", body: JSON.stringify({ text: msg, locale }) });
+    const res = await callApi<{ prefs?: InterpretedPrefs; unsupported?: string[]; redirect?: string }>("/api/ai/interpret", { method: "POST", body: JSON.stringify({ text: msg, locale }) });
     setBusy(null);
     if (!res.ok) {
       setText(msg); // keep what they typed, so retrying is one tap
       return push({ from: "bot", kind: "error", code: res.code, retry: msg });
     }
+    if (res.data.redirect) return push({ from: "bot", kind: "text", text: res.data.redirect });
     const got = res.data.prefs;
+    if (!got) return push({ from: "bot", kind: "text", text: t.nothingChanged });
     const changed: string[] = [];
     const notes: string[] = [];
     const c: ChatApply = {};
@@ -209,7 +211,6 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
           <span className="trip-chat-mark" aria-hidden><Sparkles size={16} /></span>
           <div className="min-w-0 flex-1">
             <h2 id={`${id}-title`} className="font-semibold">{t.title}</h2>
-            <p className="small muted">{t.sub}</p>
           </div>
           <button type="button" className="trip-chat-close" aria-label={t.close} onClick={() => setOpen(false)}><X aria-hidden size={18} /></button>
         </header>
@@ -267,7 +268,6 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
             />
             <button type="submit" className="trip-chat-send" aria-label={t.send} disabled={disabled || text.trim().length < 4}><Send aria-hidden size={18} className="rtl:-scale-x-100" /></button>
           </form>
-          <p className="trip-chat-limit small muted">{t.limit}</p>
         </div>
       </div>
     </aside>

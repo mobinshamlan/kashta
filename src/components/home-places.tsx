@@ -21,14 +21,13 @@ const SHORT = 4;
  * answer above (rankNight). The map and the list share one selected place; its essentials sit in
  * a compact panel on the map, with one action that carries it into the plan.
  */
-export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onNight, onPlan, carry = "" }: {
+export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onPlan, carry = "" }: {
   mode: Experience;
   data: PlanResponse;
   night: string;
   ranked: ScoreRow[];
   selected: string;
   onSelect: (slug: string) => void;
-  onNight: (night: string) => void;
   onPlan: () => void;
   /** Plan settings (group, tuned preferences, step) carried to the place page and back. */
   carry?: string;
@@ -44,9 +43,6 @@ export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onNi
   const row = ranked[selIndex];
   const d = getDestination(row.slug)!;
   const PermitIcon = d.permit.status === "permit_required" || d.permit.status === "verified_permitted" ? ShieldCheck : ShieldAlert;
-  // This place's own best night this week (highest score, earlier on a tie), offered only when it beats tonight.
-  const best = data.results.filter((r) => r.slug === row.slug && r.score !== null).sort((a, b) => b.score! - a.score! || a.date.localeCompare(b.date))[0];
-  const betterNight = best && best.date !== night && best.score! > row.score! ? best.date : null;
 
   const pickFromMap = (slug: string) => {
     onSelect(slug);
@@ -59,10 +55,7 @@ export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onNi
 
   return (
     <div className="home-places">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h2 id="places-title" className="home-h2" tabIndex={-1} data-step-focus>{t.placesHeading}</h2>
-        <p className="small muted">{t.placesBasis(formatNight(night, locale))}</p>
-      </div>
+      <h2 id="places-title" className="home-h2" tabIndex={-1} data-step-focus>{t.placesHeading}</h2>
 
       <div className="home-places-grid mt-5">
         <div className="home-places-map min-w-0">
@@ -92,7 +85,6 @@ export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onNi
                   <span className="night-place-num num" aria-hidden data-rating={rr}>{ranked.indexOf(r) + 1}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold" id={isSel ? "place-panel-name" : undefined}>{dd.name[locale]}</span>
-                    {!isSel && <span className="block small muted"><bdi className="num">{approxHours(estimateDrive(dd).hours, locale)}</bdi></span>}
                   </span>
                   <span className="rec-rating shrink-0" style={{ ["--rating" as string]: RATING_COLOR[rr] }}>{dict.rating[rr]}</span>
                 </button>
@@ -101,14 +93,9 @@ export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onNi
                   <div className="place-panel" id="place-panel">
                         <ReasonList className="small" reasons={nightReasons(row, data.metrics[`${row.slug}|${row.date}`], 1)} />
                         <p className="place-panel-facts small mt-2">
-                          <span title={dict.common.estimateNote}><Car aria-hidden size={15} /><bdi className="num">{approxHours(estimateDrive(d).hours, locale)}</bdi> <span className="muted">({t.estimate})</span></span>
+                          <span><Car aria-hidden size={15} /><bdi className="num">{approxHours(estimateDrive(d).hours, locale)}</bdi></span>
                           <span><PermitIcon aria-hidden size={15} />{dict.permit.short[d.permit.status]}</span>
                         </p>
-                        {betterNight && (
-                          <button type="button" className="place-panel-night small" onClick={() => onNight(betterNight)}>
-                            {t.bestNightFor(formatNight(betterNight, locale, { short: true }))}
-                          </button>
-                        )}
                         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
                           <button type="button" className="btn btn-accent" onClick={onPlan}>
                             {t.usePlace}

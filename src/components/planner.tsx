@@ -57,6 +57,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
   const [text, setText] = useState(initialText);
   const [applied, setApplied] = useState<Set<Field>>(new Set());
   const [understood, setUnderstood] = useState<{ prefs: InterpretedPrefs; unclear?: string[] | null; unsupported?: string[] } | null>(null);
+  const [interpretReply, setInterpretReply] = useState<string | null>(null);
   const [interpret, setInterpret] = useState<{ s: "idle" | "loading" } | { s: "error"; code: ClientErrorCode }>({ s: "idle" });
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [plan, setPlan] = useState<
@@ -92,7 +93,9 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
       return;
     }
     setInterpret({ s: "loading" });
-    const res = await callApi<{ prefs: InterpretedPrefs; unsupported?: string[] }>("/api/ai/interpret", {
+    setInterpretReply(null);
+    setUnderstood(null);
+    const res = await callApi<{ prefs?: InterpretedPrefs; unsupported?: string[]; redirect?: string }>("/api/ai/interpret", {
       method: "POST",
       body: JSON.stringify({ text, locale }),
     });
@@ -100,7 +103,17 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
       setInterpret({ s: "error", code: res.code });
       return;
     }
+    if (res.data.redirect) {
+      setUnderstood(null);
+      setInterpretReply(res.data.redirect);
+      setInterpret({ s: "idle" });
+      return;
+    }
     const got = res.data.prefs;
+    if (!got) {
+      setInterpret({ s: "idle" });
+      return;
+    }
     const changed = new Set<Field>();
     const next = { ...prefs };
     if (got.experience) {
@@ -366,7 +379,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
             value={text}
             maxLength={600}
             placeholder={h.placeholder}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => { setText(e.target.value); setInterpretReply(null); setUnderstood(null); }}
             aria-invalid={interpret.s === "error" && interpret.code === "invalid_input"}
           />
           <p className="small mt-2 text-ink-2">{h.try}</p>
@@ -384,6 +397,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
           {ai === false && <p className="small mt-3 text-ink-2">{dict.errors.ai_not_configured}</p>}
           <div aria-live="polite">
             {interpret.s === "error" && <ErrorState className="mt-4" code={interpret.code} />}
+            {interpretReply && <p role="status" className="small mt-3 rounded-xl bg-sand-2 p-3">{interpretReply}</p>}
             {understood && (
               <div className="small mt-3 rounded-xl bg-sand-2 p-3">
                 <p><span className="font-medium">{h.understood}</span> {interpretedSummary(understood.prefs)}</p>
@@ -543,12 +557,10 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
                       {x === "kashta" ? <Flame aria-hidden size={20} /> : <Sparkles aria-hidden size={20} />}
                       {dict.experience[x]}
                     </span>
-                    <span className="small muted hidden sm:block">{x === "kashta" ? dict.experience.kashtaDesc : dict.experience.starsDesc}</span>
                   </span>
                 </label>
               ))}
             </div>
-            <p className="small mt-3 text-ink-2">{dict.home.illustration}</p>
             {helper}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button type="button" className="btn plan-go" onClick={() => goTo(2)}>{t.toNight}</button>
@@ -687,7 +699,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
 
         {data && (
           <p className="small mt-10 text-ink-2">
-            {data.forecastFetchedAt ? <>{dict.common.forecastBy} · {dict.common.updated} <time className="num" dateTime={data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(data.forecastFetchedAt))}</time></> : t.resultsTimestampMissing}
+            {data.forecastFetchedAt ? <>{dict.common.updated} <time className="num" dateTime={data.forecastFetchedAt}>{new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(data.forecastFetchedAt))}</time></> : t.resultsTimestampMissing}
             {plan.s === "ok" && !resultSettingsMatch && <> · {t.resultsUsePreviousSettings}</>}
           </p>
         )}

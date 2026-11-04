@@ -34,6 +34,7 @@ export const interpretRequestSchema = z.object({
  * Llama only fills what the user actually said. Unknown keys are dropped.
  */
 export const interpretedPrefsSchema = z.object({
+  redirect: z.string().trim().min(1).max(350).nullish(),
   experience: z.enum(["kashta", "stars"]).nullish(),
   groupSize: z.coerce.number().int().min(1).max(40).nullish(),
   tempPref: z.enum(["cool", "mild", "warm"]).nullish(),

@@ -109,7 +109,6 @@ export function RecommendationCard({
             <span className="inline-flex items-center gap-1.5" title={dict.common.estimateNote}>
               <Car aria-hidden size={16} />
               <bdi className="num">{approxHours(drive.hours, locale)}</bdi>
-              <span>{locale === "ar" ? "(تقدير)" : "(est.)"}</span>
             </span>
             <span className="inline-flex items-center gap-1.5">
               <PermitIcon aria-hidden size={16} />
