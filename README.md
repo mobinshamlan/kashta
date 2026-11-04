@@ -1,9 +1,9 @@
 # KASHTA | كشتة
 
 An Arabic-first desert night planner for Riyadh. KASHTA compares real forecasts of
-temperature, wind, rain, cloud, dust and moonlight for official camping sites around Riyadh,
+temperature, wind, rain, cloud, dust and moonlight for camping sites around Riyadh listed in the NCVC Camping Guide 2025,
 ranks the next seven nights with a transparent **Kashta Score**, shows camping-permit
-information with its official source, and uses **Meta Llama 4 Scout** to read trip descriptions
+information with its published source, and uses **Meta Llama 4 Scout** to read trip descriptions
 and explain the results.
 
 Built for Project 4 (Meta × Startupbootcamp × Tuwaiq Academy), with Llama as its primary AI
@@ -118,7 +118,7 @@ For commercial use, subscribe to Open-Meteo or self-host it and set `OPEN_METEO_
 ```
 src/app/                 pages and API route handlers (api/plan, api/forecast, api/ai/*)
 src/components/          UI (planner, destination forecast, checklist, star hunter, charts)
-src/lib/destinations.ts  verified destination dataset and permit records
+src/lib/destinations.ts  destination dataset (13 NCVC-listed sites + 1 unverified, never recommended) and permit records
 src/lib/weather.ts       Open-Meteo client (timeouts, rate limits, missing data)
 src/lib/nights.ts        night windows, coverage rules, moon and twilight
 src/lib/score.ts         Kashta Score

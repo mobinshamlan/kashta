@@ -18,7 +18,14 @@ const STATUS: Record<ApiErrorCode, number> = {
 };
 
 export function apiError(code: ApiErrorCode, message: string, details?: unknown) {
-  return Response.json({ error: { code, message, details } }, { status: STATUS[code] });
+  const headers: Record<string, string> = { "Cache-Control": "private, no-store" };
+  if (code === "too_many_requests") headers["Retry-After"] = "60";
+  return Response.json({ error: { code, message, details } }, { status: STATUS[code], headers });
+}
+
+/** Return request-specific API data without allowing a browser or shared cache to retain it. */
+export function privateJson(body: unknown) {
+  return Response.json(body, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export function fromException(err: unknown) {
@@ -29,8 +36,33 @@ export function fromException(err: unknown) {
 }
 
 export async function readJson(request: Request): Promise<unknown> {
+  const maxBytes = 16 * 1024;
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return undefined;
+
+  const reader = request.body?.getReader();
+  if (!reader) return undefined;
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
   try {
-    return await request.json();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return undefined;
+      }
+      chunks.push(value);
+    }
+
+    const body = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(body)) as unknown;
   } catch {
     return undefined;
   }
@@ -41,9 +73,22 @@ export async function readJson(request: Request): Promise<unknown> {
  * Llama allocation from accidental loops; it is not a security boundary.
  */
 const hits = new Map<string, number[]>();
+let lastRateLimitSweep = 0;
 export function rateLimited(request: Request, limit = 12, windowMs = 60_000): boolean {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  // On Vercel this header is set by the platform and cannot be spoofed by the client.
+  const ip =
+    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "local";
   const now = Date.now();
+  if (now - lastRateLimitSweep >= windowMs) {
+    for (const [key, timestamps] of hits) {
+      const active = timestamps.filter((timestamp) => now - timestamp < windowMs);
+      if (active.length === 0) hits.delete(key);
+      else hits.set(key, active);
+    }
+    lastRateLimitSweep = now;
+  }
   const recent = (hits.get(ip) ?? []).filter((t) => now - t < windowMs);
   recent.push(now);
   hits.set(ip, recent);

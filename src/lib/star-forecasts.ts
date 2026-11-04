@@ -1,11 +1,11 @@
 import type { ForecastResponse, NightSummary, PlanResponse, ScoreRow } from "./api-types";
-import { DESTINATIONS, estimateDrive } from "./destinations";
+import { RECOMMENDABLE, estimateDrive } from "./destinations";
 import { loadForecast } from "./forecast-storage";
 import { upcomingNights } from "./nights";
 import { scoreNight } from "./score";
 import type { PlanPrefs } from "./types";
 
-const starSites = DESTINATIONS.filter(site => site.experiences.includes("stars") && estimateDrive(site).hours <= 5);
+const starSites = RECOMMENDABLE.filter(site => site.experiences.includes("stars") && estimateDrive(site).hours <= 5);
 
 /** Restore a complete comparison pool; never silently treat uncached sites as worse. */
 export function loadStarForecasts(): Record<string, ForecastResponse> | null {

@@ -18,7 +18,12 @@ export function PermitBadge({ status, label }: { status: PermitStatus; label: st
   );
 }
 
-export function PermitPanel({ permit, dict, locale }: { permit: Permit; dict: Dict; locale: Locale }) {
+/**
+ * The permit's source facts. "block": the full olive panel with the apply action. "quiet": inside a
+ * reference section, where the apply action already sits at the top of the page.
+ */
+export function PermitPanel({ permit, dict, locale, variant = "block" }: { permit: Permit; dict: Dict; locale: Locale; variant?: "block" | "quiet" }) {
+  const quiet = variant === "quiet";
   const checked = new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB", {
     day: "numeric",
     month: "long",
@@ -26,14 +31,14 @@ export function PermitPanel({ permit, dict, locale }: { permit: Permit; dict: Di
   }).format(new Date(`${permit.checkedOn}T12:00:00Z`));
 
   return (
-    <section aria-labelledby="permit-heading" className="bg-olive p-6 text-olive-ink md:p-10">
+    <section id="permit" aria-labelledby="permit-heading" className={quiet ? "" : "rounded-[14px] bg-olive p-6 text-olive-ink md:p-10"}>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 id="permit-heading" className="sub">
+        <h2 id="permit-heading" className={quiet ? "font-medium" : "sub"}>
           {dict.permit.title}
         </h2>
-        <PermitBadge status={permit.status} label={dict.permit.status[permit.status]} />
+        <PermitBadge status={permit.status} label={dict.permit.short[permit.status]} />
       </div>
-      <p className="mt-5 max-w-[60ch]">{permit.notes[locale]}</p>
+      <p className={`${quiet ? "mt-3" : "mt-5"} max-w-[60ch]`}>{permit.notes[locale]}</p>
       <dl className="small mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-[auto_1fr]">
         <dt className="font-medium">{dict.common.source}</dt>
         <dd>
@@ -45,7 +50,7 @@ export function PermitPanel({ permit, dict, locale }: { permit: Permit; dict: Di
         <dt className="font-medium">{dict.common.checkedOn}</dt>
         <dd className="num">{checked}</dd>
       </dl>
-      {permit.applyUrl && (
+      {permit.applyUrl && !quiet && (
         <a
           href={permit.applyUrl}
           target="_blank"
@@ -56,7 +61,7 @@ export function PermitPanel({ permit, dict, locale }: { permit: Permit; dict: Di
           <ExternalLink aria-hidden size={16} />
         </a>
       )}
-      <p className="small mt-6 max-w-[62ch] opacity-90">
+      <p className={`small mt-6 max-w-[62ch] ${quiet ? "text-ink-2" : "opacity-90"}`}>
         {dict.permit.disclaimer} {dict.permit.noLive}
       </p>
     </section>

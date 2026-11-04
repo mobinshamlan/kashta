@@ -67,7 +67,8 @@ async function post(url: string, headers: Record<string, string>, body: unknown)
   if (res.status === 429) throw new LlamaError("rate_limited", "Llama provider rate limit reached");
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new LlamaError("ai_failed", `Llama provider answered ${res.status}: ${text.slice(0, 200)}`);
+    console.error(`Llama provider answered ${res.status}: ${text.slice(0, 500)}`);
+    throw new LlamaError("ai_failed", `Llama provider answered ${res.status}`);
   }
   try {
     return await res.json();
