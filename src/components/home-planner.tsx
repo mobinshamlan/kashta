@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Car, Check, ChevronLeft, ChevronRight, Clock, ExternalLink, LoaderCircle, ShieldCheck } from "lucide-react";
+import { CalendarDays, Car, Check, ChevronLeft, ChevronRight, Clock, ExternalLink, Flame, LoaderCircle, MapPin, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { buildChecklist } from "@/lib/checklist";
@@ -115,22 +115,24 @@ export function HomePlanner({
   // The hero chose activity and night; the week's pick chose the place. Show that, not the steps.
   if (showSummary && data && chosen && chosenDest && night) {
     const choices = [
-      { label: p.steps.activity, value: dict.experience[mode], step: 1 as const },
-      { label: p.steps.night, value: formatNight(night, locale, { short: true }), step: 2 as const },
-      { label: p.steps.place, value: chosenDest.name[locale], step: 3 as const },
+      { label: p.steps.activity, value: dict.experience[mode], step: 1 as const, Icon: mode === "kashta" ? Flame : Sparkles },
+      { label: p.steps.night, value: formatNight(night, locale, { short: true }), step: 2 as const, Icon: CalendarDays },
+      { label: p.steps.place, value: chosenDest.name[locale], step: 3 as const, Icon: MapPin },
     ];
     return (
       <div className="home-planner" data-mode={mode}>
         {rail}
         <div className="plan-step-in mt-6">
-          <h3 ref={headingRef} tabIndex={-1} className="plan-step-title lead font-medium">{t.readyTitle}</h3>
-          <p className="small mt-1 text-ink-2">{t.readyLead}</p>
+          <h3 ref={headingRef} tabIndex={-1} className="plan-step-title">{t.readyTitle}</h3>
           <ul className="ready-choices mt-4" aria-label={p.title}>
             {choices.map((c) => (
-              <li key={c.step}>
-                <span className="ready-k">{c.label}</span>
+              <li key={c.step} className="ready-choice">
+                <span className="ready-choice-top">
+                  <span className="ready-choice-icon" aria-hidden><c.Icon size={19} strokeWidth={1.8} /></span>
+                  <span className="ready-k">{c.label}</span>
+                </span>
                 <span className="ready-v">{c.value}</span>
-                <button type="button" className="link small min-h-11" onClick={() => go(c.step)}>{t.change}</button>
+                <button type="button" className="link small min-h-11 ready-edit" onClick={() => go(c.step)} aria-label={`${t.change} ${c.label}`}>{t.change}</button>
               </li>
             ))}
           </ul>
