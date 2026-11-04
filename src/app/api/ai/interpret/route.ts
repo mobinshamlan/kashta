@@ -29,10 +29,11 @@ Never infer a preference from the planner's defaults or from the user's activity
 
 Fields:
 - "experience": "kashta" (camping, fire, gathering) or "stars" (stargazing, نجوم, درب التبانة).
+- "city": where they set out from, only when they say so: "riyadh" | "jeddah" | "makkah" | "madinah" | "dammam" | "buraydah" | "abha" ("طالعين من جدة" = "jeddah").
 - "groupSize": integer number of people (e.g. "حنا خمسة" = 5).
 - "tempPref": "cool" | "mild" | "warm" — the evening temperature they want.
 - "windTolerance": "low" (they hate wind / wind matters a lot) | "medium" | "high" (wind does not bother them).
-- "maxDriveHours": number, maximum one-way driving hours (0.5–6).
+- "maxDriveHours": number, maximum one-way driving hours (1.5–12).
 - "date": "flexible" for "هالأسبوع", "هالاسبوع", "هذا الأسبوع", "this week" or any night in the coming week; otherwise one date from the calendar below when they name a specific day ("الخميس", "tonight", "بكرة"). Do not mark a recognized week phrase unclear.
   Nights are dated by the evening they start. In Saudi Arabic «ليلة <day>» means the night BEFORE that day: «ليلة الجمعة» = the Thursday evening date, «ليلة السبت» = the Friday evening date. A bare day name («يوم الخميس», «الخميس») or English "Friday night" means that day's own evening.
 - "priorities": up to 3 of "temp","wind","rain","dust","clouds","moon" that they said matter most.
@@ -42,7 +43,7 @@ Fields:
 - "question": true when the user asks about KASHTA rather than asking to change the plan.
 - "redirect": a short same-language response only for unrelated requests or serious safety concerns. Leave it out for anything about KASHTA.
 
-Calendar of the next seven nights (Riyadh time):
+Calendar of the next seven nights (Saudi time):
 ${calendar}
 
 Never invent weather, places, permits or numbers. Never add fields that are not listed.`;
@@ -122,7 +123,7 @@ async function answer(text: string, locale: Locale, context: { slug: string; dat
   const plan = context ? await scorePlan(context.slug, context.date, context.prefs) : null;
   const facts = (plan && context ? answerFacts(plan, context.prefs, locale) : null) ?? { selectedPlace: null, note: context ? "The selected night is no longer in the seven-day forecast; ask them to pick a new night." : "The user has not picked a place and night yet." };
   const language = locale === "ar" ? "Arabic (natural Saudi tone, not heavy slang; units as °م، كم/س، ٪)" : "English";
-  const system = `You are KASHTA's trip assistant. KASHTA recommends an upcoming night and a verified place near Riyadh for a kashta (desert camping) or stargazing, from the forecast.
+  const system = `You are KASHTA's trip assistant. KASHTA recommends an upcoming night and a verified place in Saudi Arabia for a kashta (desert camping) or stargazing, from the forecast.
 Answer the user's question in ${language}, in at most three short sentences. Use ONLY the facts JSON below for anything about the selected place, night, forecast, drive, permit, ranking or packing.
 - "Why this place": in two short sentences, use whyThisPlace only: describe each mainReasons condition with its measured value and unit (evening/coldest °C, gust km/h, rain chance %, cloud %, dust µg/m³, moon-free dark hours), then, only if rankedFirstWithinDriveLimitThatNight is true, say it ranked first within the drive limit that night; otherwise say that scoredHigherThatNight fit better that night. Present "helped" conditions as reasons and a "held it back" condition as a caution, never as a plus. Do not use otherForecastDetails for this. It is a forecast: say "expected".
 - otherForecastDetails: use only when the user asks about a specific value.

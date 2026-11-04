@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyInterpretationGuards, chatIntent, extractGroupSize } from "../src/lib/interpretation";
+import { applyInterpretationGuards, chatIntent, extractGroupSize, extractCity } from "../src/lib/interpretation";
 import type { InterpretedPrefs } from "../src/lib/schemas";
 
 const parsed: InterpretedPrefs = {
@@ -101,4 +101,14 @@ test("questions about the plan are answered, never applied or redirected", () =>
   assert.equal(chatIntent("Is the permit needed here", { redirect: "I only plan trips." }), "question");
   assert.equal(chatIntent("Tell me a joke", { redirect: "Ha! Let's plan a night out instead." }), "redirect");
   assert.equal(chatIntent("نبيها ليلة الجمعة، وحنا ستة", {}), "change");
+});
+
+test("the start city comes only from where the user says they set out", () => {
+  assert.equal(extractCity("طالعين من جدة الخميس وحنا خمسة"), "jeddah");
+  assert.equal(extractCity("احنا في الدمام ونبي كشتة"), "dammam");
+  assert.equal(extractCity("We're leaving from Abha on Friday"), "abha");
+  assert.equal(extractCity("من بريدة"), "buraydah");
+  assert.equal(extractCity("نبي كشتة هالأسبوع"), null);
+  // A city named without "من/في/from" is not taken as the start.
+  assert.equal(extractCity("كشتة قريبة جدة؟"), null);
 });

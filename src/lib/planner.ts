@@ -48,7 +48,7 @@ export function eligibleDestinations(prefs: PlanPrefs) {
   // Unverified places stay on their own pages but never enter a recommendation.
   for (const d of RECOMMENDABLE) {
     if (!d.experiences.includes(prefs.experience)) continue;
-    if (estimateDrive(d).hours <= prefs.maxDriveHours) considered.push(d);
+    if (estimateDrive(d, prefs.city).hours <= prefs.maxDriveHours) considered.push(d);
     else excluded.push(d.slug);
   }
   return { considered, excluded };

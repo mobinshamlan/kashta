@@ -1,6 +1,6 @@
 import type { NightSummary, PlanResponse, ScoreRow } from "./api-types";
 import { estimateDrive, getDestination } from "./destinations";
-import type { Factor } from "./types";
+import type { CityId, Factor } from "./types";
 
 export type Reason = {
   factor: Factor;
@@ -68,12 +68,12 @@ export const NEARBY_TIE_POINTS = 5;
  * The pick for each night, in night order: among places scoring within NEARBY_TIE_POINTS of the
  * night's top score, the one with the shortest estimated drive. Scores are never changed.
  */
-export function bestPerNight(data: Pick<PlanResponse, "nights" | "results">) {
+export function bestPerNight(data: Pick<PlanResponse, "nights" | "results">, city: CityId = "riyadh") {
   return data.nights.map((night) => {
     const scored = data.results.filter((r) => r.date === night && r.score !== null);
     const top = Math.max(...scored.map((r) => r.score!));
     const close = scored.filter((r) => r.score! >= top - NEARBY_TIE_POINTS);
-    const best = close.sort((a, b) => driveHours(a.slug) - driveHours(b.slug) || b.score! - a.score!)[0];
+    const best = close.sort((a, b) => driveHours(a.slug, city) - driveHours(b.slug, city) || b.score! - a.score!)[0];
     // Unscored nights name what the forecast hasn't covered yet, so "incomplete" never reads as "poor".
     const missing = best ? [] : [...new Set(data.results.filter((r) => r.date === night).flatMap((r) => r.missing ?? []))];
     return { night, best, missing };
@@ -87,18 +87,18 @@ export type NightPick = ReturnType<typeof bestPerNight>[number];
  * NEARBY_TIE_POINTS of the top share first place and the nearest leads (so row 0 is always the
  * night's pick from bestPerNight); the rest follow by score. Scores are never changed.
  */
-export function rankNight(data: Pick<PlanResponse, "results">, night: string): ScoreRow[] {
+export function rankNight(data: Pick<PlanResponse, "results">, night: string, city: CityId = "riyadh"): ScoreRow[] {
   const scored = data.results.filter((r) => r.date === night && r.score !== null);
   const top = Math.max(...scored.map((r) => r.score!));
   const near = (r: ScoreRow) => r.score! >= top - NEARBY_TIE_POINTS;
   return [...scored].sort((a, b) => {
-    if (near(a) && near(b)) return driveHours(a.slug) - driveHours(b.slug) || b.score! - a.score!;
+    if (near(a) && near(b)) return driveHours(a.slug, city) - driveHours(b.slug, city) || b.score! - a.score!;
     if (near(a) !== near(b)) return near(a) ? -1 : 1;
-    return b.score! - a.score! || driveHours(a.slug) - driveHours(b.slug);
+    return b.score! - a.score! || driveHours(a.slug, city) - driveHours(b.slug, city);
   });
 }
 
-function driveHours(slug: string) {
+function driveHours(slug: string, city: CityId) {
   const d = getDestination(slug);
-  return d ? estimateDrive(d).hours : Infinity;
+  return d ? estimateDrive(d, city).hours : Infinity;
 }

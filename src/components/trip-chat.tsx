@@ -4,7 +4,7 @@ import { ChevronDown, LoaderCircle, MessageCircle, Send, Sparkles, X } from "luc
 import { useEffect, useId, useRef, useState } from "react";
 import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
-import { getDestination } from "@/lib/destinations";
+import { DRIVE_MAX_HOURS, DRIVE_MIN_HOURS, getDestination } from "@/lib/destinations";
 import { formatNight } from "@/lib/i18n";
 import { nightReasons, type NightPick } from "@/lib/reasons";
 import type { Explanation, InterpretedPrefs } from "@/lib/schemas";
@@ -130,9 +130,13 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
       changed.push(`${dict.home.forPeople}: ${got.groupSize}`);
     }
     const tune: Partial<Tune> = {};
+    if (got.city && got.city !== prefs.city) {
+      tune.city = got.city;
+      changed.push(`${dict.plan.cityLegend} ${dict.common.cities[got.city]}`);
+    }
     if (got.maxDriveHours) {
-      // The same range the planner offers (1.5–5 h, half-hour steps).
-      tune.maxDriveHours = Math.min(5, Math.max(1.5, Math.round(got.maxDriveHours * 2) / 2));
+      // The same range the planner offers (1.5–12 h, half-hour steps).
+      tune.maxDriveHours = Math.min(DRIVE_MAX_HOURS, Math.max(DRIVE_MIN_HOURS, Math.round(got.maxDriveHours * 2) / 2));
       if (tune.maxDriveHours !== got.maxDriveHours) notes.push(t.driveClamped(dict.plan.driveValue(tune.maxDriveHours)));
       changed.push(`${dict.plan.driveLabel}: ${dict.plan.driveValue(tune.maxDriveHours)}`);
     }
@@ -155,7 +159,7 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     if (!changed.length) return push({ from: "bot", kind: "text", text: t.nothingChanged, notes });
     push({ from: "bot", kind: "set", changed, notes });
     // Wait for the app to re-rank with the new settings, then quote its pick.
-    const key = tuneKey(c.experience ?? mode, { maxDriveHours: prefs.maxDriveHours, tempPref: prefs.tempPref, windTolerance: prefs.windTolerance, priorities: prefs.priorities, ...c.tune });
+    const key = tuneKey(c.experience ?? mode, { city: prefs.city, maxDriveHours: prefs.maxDriveHours, tempPref: prefs.tempPref, windTolerance: prefs.windTolerance, priorities: prefs.priorities, ...c.tune });
     waiting.current = { key };
     onApply(c);
     setApplied((n) => n + 1);

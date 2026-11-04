@@ -16,7 +16,7 @@ These preferences apply to future product, UI, UX, and visual-design work unless
 
 - KASHTA helps people choose a suitable upcoming Saudi night and place for a kashta or stargazing, then make a simple plan.
 - Keep KASHTA as the working name and preserve the current logo unless the user explicitly asks to change them.
-- The product vision is Saudi-wide. Clearly communicate that verified places currently focus on the Riyadh area.
+- The product is Saudi-wide: verified camping sites cover nine regions, and each trip starts from a chosen city (default Riyadh). Drive times are estimates from that city.
 - Use existing project data for locations, forecasts, permits, distances, and recommendations. Never invent them. Keep unverified Rawdat Khuraim out of recommendations.
 - AI is an optional helper for understanding preferences and explaining results. It is not a source of truth for forecasts, locations, permits, or trust.
 

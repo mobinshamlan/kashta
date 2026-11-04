@@ -9,7 +9,7 @@ import { estimateDrive, getDestination } from "@/lib/destinations";
 import { approxHours, formatNight } from "@/lib/i18n";
 import { DEFAULT_PREFS } from "@/lib/prefs-storage";
 import { rating } from "@/lib/score";
-import type { Experience } from "@/lib/types";
+import type { CityId, Experience } from "@/lib/types";
 import { useI18n } from "./locale-provider";
 import { RATING_COLOR } from "./ui";
 
@@ -20,7 +20,8 @@ const checklistKey = (slug: string, date: string) => `kashta:checklist:${slug}:$
  * The finished plan: what, when, where, why, how far and the permit, then a short list to tick.
  * Everything else (full checklist, hourly forecast, sources) is on the place page.
  */
-export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver, onChangePlace, onExplain, carry = "" }: {
+export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver, onChangePlace, onExplain, carry = "", city = "riyadh" }: {
+  city?: CityId;
   mode: Experience;
   row: ScoreRow;
   data: PlanResponse;
@@ -38,7 +39,7 @@ export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver,
   const d = getDestination(row.slug)!;
   const m = data.forecasts[row.slug]?.metrics.find((x) => x.date === row.date) ?? null;
   const rt = rating(row.score);
-  const drive = estimateDrive(d);
+  const drive = estimateDrive(d, city);
   const items = buildChecklist({ experience: mode, groupSize, metrics: m, permitStatus: d.permit.status });
   // Lead with what this activity and this night call for; the permit has its own row.
   const order = mode === "stars" ? ["stars", "weather", "camp", "vehicle"] : ["weather", "camp", "vehicle", "stars"];

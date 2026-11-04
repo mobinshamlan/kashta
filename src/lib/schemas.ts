@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { FACTORS } from "./types";
+import { FACTORS, CITY_IDS } from "./types";
+import { DRIVE_MAX_HOURS } from "./destinations";
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -9,10 +10,10 @@ export const factorSchema = z.enum(FACTORS as [string, ...string[]]) as z.ZodTyp
 
 export const planPrefsSchema = z.object({
   experience: z.enum(["kashta", "stars"]),
-  city: z.literal("riyadh"),
+  city: z.enum(CITY_IDS),
   date: z.union([z.literal("flexible"), dateString]),
   groupSize: z.number().int().min(1).max(40),
-  maxDriveHours: z.number().min(0.5).max(6),
+  maxDriveHours: z.number().min(0.5).max(DRIVE_MAX_HOURS),
   tempPref: z.enum(["cool", "mild", "warm"]),
   windTolerance: z.enum(["low", "medium", "high"]),
   priorities: z.array(factorSchema).max(3).default([]),
@@ -39,10 +40,11 @@ export const interpretedPrefsSchema = z.object({
   redirect: z.string().trim().min(1).max(350).nullish(),
   question: z.boolean().nullish(),
   experience: z.enum(["kashta", "stars"]).nullish(),
+  city: z.enum(CITY_IDS).nullish(),
   groupSize: z.coerce.number().int().min(1).max(40).nullish(),
   tempPref: z.enum(["cool", "mild", "warm"]).nullish(),
   windTolerance: z.enum(["low", "medium", "high"]).nullish(),
-  maxDriveHours: z.coerce.number().min(0.5).max(6).nullish(),
+  maxDriveHours: z.coerce.number().min(0.5).max(DRIVE_MAX_HOURS).nullish(),
   date: z.union([z.literal("flexible"), dateString]).nullish(),
   priorities: z.array(factorSchema).max(3).nullish(),
   summary: z.string().max(300).nullish(),

@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { DestinationForecast } from "@/components/destination-forecast";
 import { PermitBadge, PermitPanel } from "@/components/permit-panel";
-import { DESTINATIONS, estimateDrive, getDestination } from "@/lib/destinations";
+import { DESTINATIONS, REGION, estimateDrive, getDestination } from "@/lib/destinations";
 import { getDict } from "@/lib/locale";
 import { PHOTOS } from "@/lib/photos";
 import { tuneFromParams } from "@/lib/tune";
@@ -30,18 +30,20 @@ export default async function DestinationPage({ params, searchParams }: PageProp
   if (!d) notFound();
   const { locale, dict } = await getDict();
   const photo = PHOTOS[d.photo];
-  const drive = estimateDrive(d);
+  // Every photo in the library is from the Riyadh region; elsewhere it only sets the scene.
+  const photoElsewhere = d.region.en !== REGION.riyadh.en;
   const night = typeof sp.night === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.night) ? sp.night : undefined;
   const exp = sp.exp === "stars" || sp.exp === "kashta" ? sp.exp : undefined;
   const osm = `https://www.openstreetmap.org/?mlat=${d.lat}&mlon=${d.lon}#map=11/${d.lat}/${d.lon}`;
 
   // Carried plan settings (from the homepage) come back unchanged, so the plan is exactly as left.
   const carried = new URLSearchParams();
-  for (const k of ["group", "drive", "temp", "wind", "pri", "step"]) {
+  for (const k of ["city", "group", "drive", "temp", "wind", "pri", "step"]) {
     const v = sp[k];
     if (typeof v === "string" && /^[a-z0-9.,]{1,40}$/.test(v)) carried.set(k, v);
   }
   const tune = tuneFromParams(carried);
+  const drive = estimateDrive(d, tune.city);
   const group = Number(carried.get("group"));
   const back = `/?${new URLSearchParams({ ...(exp ? { mode: exp } : {}), ...(night ? { night } : {}), place: d.slug, ...Object.fromEntries(carried) }).toString()}#${carried.get("step") === "4" ? "plan" : "places"}`;
 
@@ -55,10 +57,10 @@ export default async function DestinationPage({ params, searchParams }: PageProp
               <Link className="rec-link inline-flex min-h-11 items-center" href={back}>{dict.detail.backToMap}</Link>
             </nav>
             <h1 className="place-intro-title">{d.name[locale]}</h1>
-            <p className="muted mt-1">{d.governorate[locale]}</p>
+            <p className="muted mt-1">{d.governorate[locale]}{locale === "ar" ? "، " : ", "}{d.region[locale]}</p>
             <ul className="place-intro-facts mt-5">
               <li title={dict.common.estimateNote}>
-                <span className="small muted block">{dict.common.driveEstimate}</span>
+                <span className="small muted block">{dict.plan.driveFrom(dict.common.cities[tune.city])}</span>
                 <span className="lead num">{approxHours(drive.hours, locale)}</span>
               </li>
               <li>
@@ -79,7 +81,7 @@ export default async function DestinationPage({ params, searchParams }: PageProp
             <div className="relative aspect-[4/3] overflow-hidden rounded-2xl">
               <Image src={photo.src} alt={photo.alt[locale]} fill priority sizes="(min-width: 1024px) 40vw, 100vw" className="object-cover" />
             </div>
-            <figcaption className="small muted mt-2">{dict.common.photoNote}: {photo.caption[locale]}</figcaption>
+            <figcaption className="small muted mt-2">{photoElsewhere ? dict.common.photoElsewhere(d.name[locale]) : `${dict.common.photoNote}: ${photo.caption[locale]}`}</figcaption>
           </figure>
         </div>
       </header>
@@ -100,7 +102,7 @@ export default async function DestinationPage({ params, searchParams }: PageProp
               <p className="max-w-[56ch]">{d.description[locale]}</p>
               <dl className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2">
                 <div>
-                  <dt className="small text-ink-2">{dict.common.driveEstimate}</dt>
+                  <dt className="small text-ink-2">{dict.plan.driveFrom(dict.common.cities[tune.city])}</dt>
                   <dd className="small mt-1"><bdi className="num">{drive.straightKm} {dict.common.km}</bdi> {dict.common.straightLine}. {dict.common.estimateNote}.</dd>
                 </div>
                 <div>

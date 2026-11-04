@@ -8,12 +8,13 @@ import { getDestination } from "@/lib/destinations";
 import { formatNight } from "@/lib/i18n";
 import { DEFAULT_PREFS, loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import { bestPerNight, rankNight } from "@/lib/reasons";
-import type { Experience } from "@/lib/types";
+import type { CityId, Experience } from "@/lib/types";
 import { DEFAULT_TUNE, tuneFromParams, tuneKey, type Tune } from "@/lib/tune";
 import { HomePlaces } from "./home-places";
 import { HomePlan, PlanSuggestion } from "./home-plan";
 import { SaduBand } from "./sadu-band";
 import { useI18n } from "./locale-provider";
+import { CityPicker } from "./city-picker";
 import { ModeSwitch } from "./mode-switch";
 import { NightScene } from "./night-scene";
 import { PlanRail, type RailStep } from "./plan-rail";
@@ -63,7 +64,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   }, []);
 
   /** Read the plan from the address: first load, reload, Back from a place page, or history. */
-  const readUrl = useCallback((fallbackGroup: number) => {
+  const readUrl = useCallback((fallbackGroup: number, fallbackCity: CityId) => {
     const sp = new URLSearchParams(window.location.search);
     const n = sp.get("night");
     const pl = sp.get("place");
@@ -76,7 +77,8 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     setReached(st === 4 ? 4 : 3);
     // The address omits the default size, so "no group" means the fallback, not "keep the current".
     setGroupSize(Number.isInteger(g) && g >= 1 && g <= 40 ? g : fallbackGroup);
-    const tuned = tuneFromParams(sp);
+    // Without ?city= the visitor's own saved start city applies, not Riyadh.
+    const tuned = { ...tuneFromParams(sp), ...(sp.get("city") ? {} : { city: fallbackCity }) };
     setTune(tuned);
     return { restore: st === 4, tuned };
   }, []);
@@ -88,13 +90,13 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     const start = initialMode ?? saved.experience;
     /* eslint-disable react-hooks/set-state-in-effect */
     setMode(start);
-    const first = readUrl(saved.groupSize);
+    const first = readUrl(saved.groupSize, saved.city);
     restoring.current = first.restore;
     /* eslint-enable react-hooks/set-state-in-effect */
     void load(start, first.tuned);
     const onPop = () => {
       const m = new URLSearchParams(window.location.search).get("mode");
-      const back = readUrl(loadPrefs().groupSize);
+      const back = readUrl(loadPrefs().groupSize, loadPrefs().city);
       const nextMode = m === "kashta" || m === "stars" ? m : null;
       if (nextMode) setMode(nextMode);
       void load(nextMode ?? start, back.tuned);
@@ -105,7 +107,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
 
   const state = loads[tuneKey(mode, tune)] ?? { s: "loading" };
   const data = state.s === "ok" ? state.data : null;
-  const nights = data ? bestPerNight(data) : [];
+  const nights = data ? bestPerNight(data, tune.city) : [];
   const bestNight = nights.reduce<string | null>((top, n) => {
     if (!n.best) return top;
     const current = nights.find((x) => x.night === top)?.best?.score ?? -1;
@@ -113,7 +115,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   }, null);
   // Only a night the forecast scores counts (an old address or the helper may name another).
   const night = picked && nights.some((n) => n.night === picked && n.best) ? picked : bestNight;
-  const ranked = data && night ? rankNight(data, night) : [];
+  const ranked = data && night ? rankNight(data, night, tune.city) : [];
   // One place for the hero, map, list and plan: the visitor's pick if it's ranked tonight, else the night's pick.
   const chosen = ranked.find((r) => r.slug === place) ?? ranked[0];
   const chosenDest = chosen ? getDestination(chosen.slug) : undefined;
@@ -121,6 +123,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   const prefs = { ...DEFAULT_PREFS, ...tune, experience: mode, groupSize, date: "flexible" as const };
   // Settings a place page needs to score like this page, and to link back to the same plan.
   const carry = new URLSearchParams(Object.entries({
+    city: tune.city !== DEFAULT_TUNE.city ? tune.city : "",
     group: groupSize !== DEFAULT_PREFS.groupSize ? String(groupSize) : "",
     drive: tune.maxDriveHours !== DEFAULT_TUNE.maxDriveHours ? String(tune.maxDriveHours) : "",
     temp: tune.tempPref !== DEFAULT_TUNE.tempPref ? tune.tempPref : "",
@@ -149,6 +152,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     set("night", used || (picked && night === picked) ? night : null);
     set("place", used ? chosen!.slug : place && chosen?.slug === place ? place : null);
     set("step", reached === 4 ? "4" : null);
+    set("city", tune.city !== DEFAULT_TUNE.city ? tune.city : null);
     set("group", groupSize !== DEFAULT_PREFS.groupSize ? String(groupSize) : null);
     set("drive", tune.maxDriveHours !== DEFAULT_TUNE.maxDriveHours ? String(tune.maxDriveHours) : null);
     set("temp", tune.tempPref !== DEFAULT_TUNE.tempPref ? tune.tempPref : null);
@@ -214,6 +218,18 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     setReached((r) => (to > r ? to : r));
     scrollTo(to);
   };
+  /** A new start city changes every drive time, so the places are re-ranked from the recommended night. */
+  const chooseCity = (next: CityId) => {
+    if (next === tune.city) return;
+    push.current = true;
+    const t = { ...tune, city: next };
+    setTune(t);
+    setPicked(null);
+    setPlace(null);
+    setReached(3);
+    savePrefs({ ...loadPrefs(), city: next });
+    void load(mode, t);
+  };
   const changeGroup = (n: number) => {
     setGroupSize(n);
     savePrefs({ ...loadPrefs(), groupSize: n });
@@ -230,6 +246,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
       savePrefs({ ...loadPrefs(), experience: m });
     }
     if (retune) setTune(t);
+    if (t.city !== tune.city) savePrefs({ ...loadPrefs(), city: t.city });
     // "night" present (even null = any night) replaces the night; otherwise keep it unless the mode changed.
     const nightGiven = "night" in c;
     if (nightGiven || retune) setPicked(nightGiven ? (c.night ?? null) : m === mode ? picked : null);
@@ -245,8 +262,10 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     push.current = true;
     setPicked(null);
     setPlace(null);
-    setTune(DEFAULT_TUNE);
-    void load(mode, DEFAULT_TUNE);
+    // The start city is where the visitor lives, not a trip setting, so it stays.
+    const reset = { ...DEFAULT_TUNE, city: tune.city };
+    setTune(reset);
+    void load(mode, reset);
     changeGroup(DEFAULT_PREFS.groupSize);
     setReached(3);
     scrollTo(1);
@@ -292,7 +311,10 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
         <div className="frame home-v5-grid">
           <div className="home-v4-main min-w-0">
             <h1 id="hero-title" className="home-v3-title" tabIndex={-1} data-step-focus>{t.heroByMode[mode].h1}</h1>
-            <ModeSwitch className="mt-5" value={mode} onChange={chooseMode} legend={t.modeLegend} />
+            <div className="hero-controls mt-5">
+              <ModeSwitch value={mode} onChange={chooseMode} legend={t.modeLegend} />
+              <CityPicker value={tune.city} onChange={chooseCity} experience={mode} maxDriveHours={tune.maxDriveHours} />
+            </div>
             <div className="home-v4-answer" aria-live="polite" aria-busy={state.s === "loading"}>
               {state.s === "loading" && (
                 <div className="rec-card on-night" data-mode={mode}>
@@ -305,6 +327,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
               {data && chosen && night && (
                 <RecommendationCard
                   key={`${mode}-${chosen.slug}-${chosen.date}`}
+                  city={tune.city}
                   compact
                   facts={false}
                   row={chosen}
@@ -346,6 +369,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
                   <p className="small text-star-2">{dict.common.updated} <time className="num" dateTime={data.forecastFetchedAt}>{updatedAt}</time></p>
                 )}
               </div>
+              {data && <p className="small mt-3 text-star-2">{t.weekRated(nights.filter((n) => n.best).length, nights.length)}</p>}
               <div className="mt-3">
                 {data ? (
                   <SevenNights compact nights={nights} metricsFor={(n) => { const r = nights.find((x) => x.night === n)?.best; return r ? data.metrics[`${r.slug}|${n}`] : undefined; }} selected={night} bestNight={bestNight} onSelect={chooseNight} />
@@ -370,7 +394,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
         <section id="places" className="home-v4-places on-night on-dark" aria-labelledby="places-title">
           <div className="frame pb-12 pt-8">
             {data && night && chosen ? (
-              <HomePlaces carry={carry} mode={mode} data={data} night={night} ranked={ranked} selected={chosen.slug} onSelect={choosePlace} onPlan={() => advance(4)} />
+              <HomePlaces carry={carry} city={tune.city} mode={mode} data={data} night={night} ranked={ranked} selected={chosen.slug} onSelect={choosePlace} onPlan={() => advance(4)} />
             ) : (
               <h2 id="places-title" className="home-h2" tabIndex={-1} data-step-focus>{t.placesHeading}</h2>
             )}
@@ -384,7 +408,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
             {linkNote && <p role="status" className="plan-note small mt-3">{t.linkChanged}</p>}
             <div className="mt-5">
               {data && chosen && step === 4 ? (
-                <HomePlan carry={carry} key={`${chosen.slug}-${chosen.date}`} mode={mode} row={chosen} data={data} groupSize={groupSize} onGroupSize={changeGroup} onStartOver={startOver} onChangePlace={() => scrollTo(3)} onExplain={() => setExplainSignal((n) => n + 1)} />
+                <HomePlan carry={carry} city={tune.city} key={`${chosen.slug}-${chosen.date}`} mode={mode} row={chosen} data={data} groupSize={groupSize} onGroupSize={changeGroup} onStartOver={startOver} onChangePlace={() => scrollTo(3)} onExplain={() => setExplainSignal((n) => n + 1)} />
               ) : data && chosen ? (
                 <PlanSuggestion mode={mode} row={chosen} picked={!!place && place === chosen.slug && chosen.slug !== ranked[0]?.slug} onUse={() => advance(4)} onChange={() => scrollTo(3)} />
               ) : (
