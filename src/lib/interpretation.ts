@@ -118,3 +118,22 @@ export function applyInterpretationGuards(
     unsupported: wantsMoonViewing ? ["moon_viewing"] : [],
   };
 }
+
+// "Why", "what does … mean", "what should I bring", "how far": the user is asking, not changing the plan.
+const ASKS_QUESTION = /(?:ليش|ليه|لماذا|لمَ|وش\s+يعني|ايش\s+يعني|إيش\s+يعني|يعني\s+(?:وش|ايش|إيش)|وش\s+معنى|ما\s+معنى|معنى|وش\s+(?:أحتاج|احتاج|نحتاج|آخذ|اخذ|ناخذ)|ايش\s+(?:أحتاج|احتاج|نحتاج|آخذ|اخذ|ناخذ)|كم\s+(?:يبعد|تبعد|المسافة|المشوار|ساعة)|اشرح|\bwhy\b|\bwhat\s+(?:does|do|is|are|'s)\b|\bwhat's\b|\bhow\s+(?:far|long|cold|windy)\b|\bdo\s+(?:i|we)\s+need\b|\bwhat\s+should\s+(?:i|we)\s+(?:bring|pack|take)\b|\bexplain\b)/iu;
+// Words that tie a message to KASHTA's plan, forecast, places or activities.
+const KASHTA_TOPIC = /(?:مكان|المكان|موقع|ليلة|الليلة|خطة|الخطة|تقييم|توقع|طقس|جو|غيم|غيوم|سحاب|هوا|هواء|رياح|حرارة|برد|مطر|غبار|قمر|نجوم|درب\s+التبانة|كشت|تخييم|تصريح|نباتي|مشوار|قيادة|أغراض|اغراض|قائمة|place|spot|site|night|plan|score|forecast|weather|cloud|wind|temperature|cold|rain|dust|moon|stars?|stargaz|milky\s+way|kashta|camp|permit|drive|checklist|pack|bring)/iu;
+
+export type ChatIntent = "change" | "question" | "redirect";
+
+/**
+ * Settles whether a chat message changes the plan, asks about it, or is off-topic. The text
+ * decides first: a question never changes preferences, and a KASHTA question is never redirected.
+ */
+export function chatIntent(text: string, model: { question?: boolean | null; redirect?: string | null }): ChatIntent {
+  const normalized = normalizeText(text);
+  if (ASKS_QUESTION.test(normalized)) return "question";
+  if (model.question) return "question";
+  if (model.redirect) return KASHTA_TOPIC.test(normalized) ? "question" : "redirect";
+  return "change";
+}

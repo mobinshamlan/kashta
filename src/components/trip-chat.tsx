@@ -20,6 +20,7 @@ type ExplainData = { explanation: Omit<Explanation, "summary"> & { summary: stri
 type Msg =
   | { id: number; from: "user"; text: string }
   | { id: number; from: "bot"; kind: "text"; text: string; notes?: string[] }
+  | { id: number; from: "bot"; kind: "answer"; text: string | null; slug?: string; date?: string }
   | { id: number; from: "bot"; kind: "set"; changed: string[]; notes: string[] }
   | { id: number; from: "bot"; kind: "result"; slug: string; date: string; key: string }
   | { id: number; from: "bot"; kind: "explain"; slug: string; date: string; data: ExplainData }
@@ -31,9 +32,9 @@ type NewMsg = Msg extends infer M ? (M extends Msg ? Omit<M, "id"> : never) : ne
 export type ChatApply = { experience?: Experience; night?: string | null; groupSize?: number; tune?: Partial<Tune> };
 
 /**
- * مساعد الطلعة: a persistent chat beside the place and plan steps. It reads plain words into the
- * planner's own settings (activity, night, group, drive limit, warmth, wind, priorities) and
- * explains a plan from the server's numbers. Recommendations always come from the app's scoring:
+ * مساعد الطلعة: a persistent chat beside the place and plan steps. It answers questions about the
+ * plan on screen from the server's numbers, and only when asked clearly reads plain words into the
+ * planner's own settings (activity, night, group, drive limit, warmth, wind, priorities). Recommendations always come from the app's scoring:
  * after a change, the reply quotes the app's new pick, never the model's.
  */
 export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explainSignal, openSignal, onApply, onUse, onPick }: {
@@ -94,13 +95,14 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     setText("");
     setShowExamples(false);
     setBusy("interpret");
-    const res = await callApi<{ prefs?: InterpretedPrefs; unsupported?: string[]; redirect?: string }>("/api/ai/interpret", { method: "POST", body: JSON.stringify({ text: msg, locale }) });
+    // The plan on screen goes along, so a question is answered from it (the server recomputes the numbers).
+    const context = chosen ? { slug: chosen.slug, date: chosen.date, prefs: { ...prefs, date: chosen.date } } : null;
+    const res = await callApi<{ prefs?: InterpretedPrefs; unsupported?: string[]; redirect?: string; answer?: string | null }>("/api/ai/interpret", { method: "POST", body: JSON.stringify({ text: msg, locale, context }) });
     setBusy(null);
-    if (!res.ok) {
-      setText(msg); // keep what they typed, so retrying is one tap
-      return push({ from: "bot", kind: "error", code: res.code, retry: msg });
-    }
+    if (!res.ok) return push({ from: "bot", kind: "error", code: res.code, retry: msg });
     if (res.data.redirect) return push({ from: "bot", kind: "text", text: res.data.redirect });
+    // A question is answered and nothing in the plan changes.
+    if ("answer" in res.data) return push({ from: "bot", kind: "answer", text: res.data.answer ?? null, slug: chosen?.slug, date: chosen?.date });
     const got = res.data.prefs;
     if (!got) return push({ from: "bot", kind: "text", text: t.nothingChanged });
     const changed: string[] = [];
@@ -222,6 +224,7 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
           ) : (
             <div key={m.id} className="chat-msg chat-msg--bot">
               {m.kind === "text" && <><p>{m.text}</p>{m.notes?.map((n) => <p key={n} className="small muted mt-1">{n}</p>)}</>}
+              {m.kind === "answer" && <AnswerMsg text={m.text} slug={m.slug} date={m.date} plan={data} />}
               {m.kind === "set" && (
                 <>
                   <p className="font-medium">{t.changed}</p>
@@ -236,7 +239,7 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
           )))}
           {busy && (
             <div className="chat-msg chat-msg--bot" aria-busy="true">
-              <p className="flex items-center gap-2 muted"><LoaderCircle aria-hidden size={15} className="animate-spin" />{busy === "explain" ? t.explaining : t.thinking}</p>
+              <p className="flex items-center gap-2 muted"><LoaderCircle aria-hidden size={15} className="animate-spin" />{t.thinking}</p>
             </div>
           )}
         </div>
@@ -341,7 +344,20 @@ function ExplainMsg({ slug, date, data, plan }: { slug: string; date: string; da
           {more && <ul className="chat-list small mt-1.5">{extra.map((x) => <li key={x}>{x}</li>)}</ul>}
         </>
       )}
-      <p className="small muted mt-2">{dict.plan.explainNote}</p>
+    </div>
+  );
+}
+
+/** A grounded answer; if the model's reply didn't pass the checks, the app's own reasons stand in. */
+function AnswerMsg({ text, slug, date, plan }: { text: string | null; slug?: string; date?: string; plan: PlanResponse | null }) {
+  const { locale, dict } = useI18n();
+  const t = dict.home.chat;
+  const row = slug && date ? plan?.results.find((r) => r.slug === slug && r.date === date) : undefined;
+  if (text) return <p lang={/[\u0600-\u06FF]/u.test(text) ? "ar" : "en"}>{text}</p>;
+  return (
+    <div lang={locale}>
+      <p>{row ? t.answerFallback(getDestination(row.slug)?.name[locale] ?? "") : t.answerNoPlan}</p>
+      {row && plan && <ReasonList className="small mt-1.5" reasons={nightReasons(row, plan.metrics[`${row.slug}|${row.date}`], 3)} />}
     </div>
   );
 }
