@@ -7,8 +7,8 @@ const WEEK_PHRASE_GLOBAL = /(?:هال(?:أ|ا)سبوع|(?:هذا|هاذا)\s+(?:
 const SPECIFIC_DATE_OR_NIGHT = /(?:\b\d{4}-\d{2}-\d{2}\b|الليلة|اليوم|بكرة|بكره|غدًا|غدا|الأحد|الاحد|الاثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|السبت|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/iu;
 const POSITIVE_MOON_VIEWING = /(?:(?:نبي|نبغى|أبي|ابغى|أبغى|ابي|ودي|أود)\s+)?(?:نشوف|نشاهد|نرى|أشوف|اشوف|أشاهد|اشاهد)\s+(?:القمر|قمر)|\b(?:see|watch|view)\s+(?:the\s+)?moon\b/iu;
 const EXPLICIT_DARK_SKY = /(?:ظلام|سماء\s+(?:مظلمة|داكنة)|بدون\s+(?:ضوء\s+)?القمر|ما\s+نبي\s+(?:ضوء\s+)?القمر|مانبي\s+(?:ضوء\s+)?القمر|moonless|no\s+moon(?:light)?|dark\s+sky|avoid\s+moonlight)/iu;
-const GROUP_SIZE_MENTION = /(?:(?:حنا|احنا|إحنا|نحن|معنا|عددنا)\s*(?:عدد)?\s*(?:[0-9٠-٩]+|واحد|واحدة|أحد|احد|اثنين|اثنتين|ثلاث|ثلاثة|أربع|أربعة|اربع|اربعة|خمس|خمسة|ست|ستة|سبع|سبعة|ثمان|ثمانية|تسع|تسعة|عشر|عشرة)|(?:[0-9٠-٩]+|واحد|واحدة|أحد|احد|اثنين|اثنتين|ثلاث|ثلاثة|أربع|أربعة|اربع|اربعة|خمس|خمسة|ست|ستة|سبع|سبعة|ثمان|ثمانية|تسع|تسعة|عشر|عشرة)\s*(?:أشخاص|اشخاص|شخص|نفر|people|of\s+us))/iu;
-const KASHTA_MENTION = /(?:كشتة|كشته|نكشت|كشت|تخييم|نخيم|مخيم|جلسة|camp(?:ing)?|fire)/iu;
+const GROUP_SIZE_MENTION = /(?:(?:حنا|احنا|إحنا|نحن|معنا|عددنا)\s*(?:عدد)?\s*(?:[0-9٠-٩]+|واحد|واحدة|أحد|احد|اثنين|اثنتين|ثلاث|ثلاثة|أربع|أربعة|اربع|اربعة|خمس|خمسة|ست|ستة|سبع|سبعة|ثمان|ثمانية|تسع|تسعة|عشر|عشرة)|(?:[0-9٠-٩]+|واحد|واحدة|أحد|احد|اثنين|اثنتين|ثلاث|ثلاثة|أربع|أربعة|اربع|اربعة|خمس|خمسة|ست|ستة|سبع|سبعة|ثمان|ثمانية|تسع|تسعة|عشر|عشرة|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:أشخاص|اشخاص|شخص|نفر|people|persons|of\s+us)|(?:we\s+are|we're|group\s+of|party\s+of)\s+(?:[0-9]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve))/iu;
+const KASHTA_MENTION = /(?:كشتة|كشته|نكشت|كشت|تخييم|نخيم|مخيم|جلسة|kashta|camp(?:ing|fire)?|bonfire|fire)/iu;
 const STARS_MENTION = /(?:رصد|نجوم|النجوم|درب\s+التبانة|stargaz|\bstars?\b)/iu;
 
 // Longest forms first so "تسعة" is not read as "تسع" + "ة", or "ستة" as "ست".
@@ -17,15 +17,17 @@ const NUMBER_WORDS: [string, number][] = [
   ["أربعة", 4], ["اربعة", 4], ["أربع", 4], ["اربع", 4], ["خمسة", 5], ["خمس", 5],
   ["ستة", 6], ["ست", 6], ["سبعة", 7], ["سبع", 7], ["ثمانية", 8], ["ثمان", 8],
   ["تسعة", 9], ["تسع", 9], ["عشرة", 10], ["عشر", 10],
+  ["one", 1], ["two", 2], ["three", 3], ["four", 4], ["five", 5], ["six", 6], ["seven", 7],
+  ["eight", 8], ["nine", 9], ["ten", 10], ["eleven", 11], ["twelve", 12],
 ];
 const NUMBER_TOKEN = `(?:[0-9٠-٩]{1,2}|${NUMBER_WORDS.map(([w]) => w).join("|")})`;
-const GROUP_BEFORE = new RegExp(`(?:حنا|احنا|إحنا|نحن|معنا|عددنا)\\s*(?:عدد)?\\s*(${NUMBER_TOKEN})(?![\\p{L}])`, "u");
+const GROUP_BEFORE = new RegExp(`(?:حنا|احنا|إحنا|نحن|معنا|عددنا|we\\s+are|we're|group\\s+of|party\\s+of)\\s*(?:عدد)?\\s*(${NUMBER_TOKEN})(?![\\p{L}])`, "iu");
 const GROUP_AFTER = new RegExp(`(?<![\\p{L}])(${NUMBER_TOKEN})\\s*(?:أشخاص|اشخاص|شخص|نفر|people|persons|of\\s+us)`, "iu");
 
 function toNumber(token: string): number | null {
   const digits = token.replace(/[٠-٩]/gu, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
   if (/^\d+$/u.test(digits)) return Number(digits);
-  return NUMBER_WORDS.find(([w]) => w === token)?.[1] ?? null;
+  return NUMBER_WORDS.find(([w]) => w === token.toLowerCase())?.[1] ?? null;
 }
 
 /** The headcount the user actually wrote, or null. Llama's number is never trusted over the text. */

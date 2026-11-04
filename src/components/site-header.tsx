@@ -49,7 +49,7 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   // Pages that open on the night scene get the night header, so the two read as one surface.
-  const dark = pathname === "/" || pathname === "/destinations" || pathname === "/about";
+  const dark = pathname === "/" || pathname === "/about" || pathname.startsWith("/destinations/");
 
   useEffect(() => {
     if (!open) return;
@@ -60,7 +60,6 @@ export function SiteHeader() {
 
   const links = [
     { href: "/", label: dict.nav.nights },
-    { href: "/destinations", label: dict.nav.destinations },
     { href: "/#plan", label: dict.nav.plan },
     { href: "/about", label: dict.nav.method },
   ];

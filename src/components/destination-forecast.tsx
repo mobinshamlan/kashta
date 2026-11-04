@@ -11,7 +11,6 @@ import type { Experience, PlanPrefs } from "@/lib/types";
 import { ChecklistPanel } from "./checklist-panel";
 import { ReasonList } from "./recommendation-card";
 import { nightReasons } from "@/lib/reasons";
-import { ExplainPanel } from "./explain-panel";
 import { useI18n } from "./locale-provider";
 import { NightChart } from "./night-chart";
 import { NightSkyTimeline } from "./night-sky-timeline";
@@ -23,12 +22,15 @@ export function DestinationForecast({
   lon,
   initialNight,
   initialExperience,
+  initialTune,
 }: {
   slug: string;
   lat: number;
   lon: number;
   initialNight?: string;
   initialExperience?: Experience;
+  /** Preferences carried from the homepage plan, so this page scores the same way. */
+  initialTune?: Partial<PlanPrefs>;
 }) {
   const { locale, dict } = useI18n();
   const [state, setState] = useState<
@@ -61,10 +63,11 @@ export function DestinationForecast({
     const saved = loadForecast(slug);
     const p = initialNight && saved ? saved.prefs : loadPrefs();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPrefs(initialExperience ? { ...p, experience: initialExperience } : p);
+    setPrefs({ ...p, ...initialTune, ...(initialExperience ? { experience: initialExperience } : {}) });
     if (saved) setState({ s: "ok", data: saved.data });
     void load();
-  }, [load, initialExperience, initialNight, slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, initialExperience, initialNight, slug, JSON.stringify(initialTune)]);
 
   const scores = useMemo(() => {
     if (state.s !== "ok" || !prefs) return [];
@@ -200,12 +203,15 @@ export function DestinationForecast({
               <ReasonList reasons={nightReasons(main, main.metrics)} />
             </div>
           )}
-          <div className="mt-8">
-            <FactorBars factors={main.factors} dealbreakers={main.dealbreakers} />
-          </div>
         </section>
 
-        <section aria-labelledby="hourly-heading" className="min-w-0">
+        {/* Technical detail for people who want it: factor scores, hourly chart, sky times. */}
+        <details className="place-more min-w-0">
+          <summary className="place-more-summary">{dict.detail.forecastMore}</summary>
+          <div className="mt-6">
+            <FactorBars factors={main.factors} dealbreakers={main.dealbreakers} />
+          </div>
+        <section aria-labelledby="hourly-heading" className="mt-10 min-w-0">
           <h2 id="hourly-heading" className="sub">
             {dict.detail.hourly}
           </h2>
@@ -250,7 +256,6 @@ export function DestinationForecast({
             <p className="small mt-4 text-star-2">{dict.stars.noLight}</p>
           </div>
         </section>
-      </div>
 
       <section aria-labelledby="night-sky-heading" className="mt-12 border-t border-ink/15 pt-7">
         <h2 id="night-sky-heading" className="sr-only">{dict.detail.seeNight}</h2>
@@ -272,15 +277,10 @@ export function DestinationForecast({
           </div>
         )}
       </section>
+        </details>
+      </div>
 
-      <section aria-labelledby="ai-heading" className="mt-16">
-        <h2 id="ai-heading" className="sr-only">
-          {dict.plan.explainTitle}
-        </h2>
-        <ExplainPanel slug={slug} date={m.date} prefs={{ ...prefs, date: m.date }} forecastKey={JSON.stringify([data.fetchedAt, m])} onPacking={setAiPacking} />
-      </section>
-
-      <section aria-labelledby="checklist-heading" className="mt-20">
+      <section aria-labelledby="checklist-heading" className="mt-14">
         <h2 id="checklist-heading" className="head">
           {dict.detail.checklist}
         </h2>

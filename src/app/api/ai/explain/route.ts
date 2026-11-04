@@ -1,4 +1,4 @@
-import { collectNumbers, extractJson, keepGrounded } from "@/lib/ai-guards";
+import { hasInternalKey, collectNumbers, extractJson, keepGrounded } from "@/lib/ai-guards";
 import { DESTINATIONS, estimateDrive, getDestination, isRecommendable } from "@/lib/destinations";
 import { apiError, fromException, privateJson, rateLimited, readJson } from "@/lib/http";
 import { chatLlama, llamaConfig } from "@/lib/llm";
@@ -76,6 +76,7 @@ export async function POST(request: Request) {
       })),
     };
 
+    const inLanguage = (x: string) => (locale === "ar" ? /[\u0600-\u06FF]/u.test(x) && !/[A-Za-z]{4,}/u.test(x) : !/[\u0600-\u06FF]/u.test(x));
     const language = locale === "ar" ? "Arabic (natural Saudi tone, not heavy slang)" : "English";
     const system = `You are KASHTA's trip assistant for desert camping near Riyadh.
 Write in ${language}. Use ONLY the facts in the JSON the user sends. Rules:
@@ -84,6 +85,11 @@ Write in ${language}. Use ONLY the facts in the JSON the user sends. Rules:
 - Do not describe the landscape, facilities or road conditions; you were not given that information.
 - If assessment is "incomplete", say which data is missing instead of judging it.
 - "alternative" must be one of candidateAlternatives (copy its slug and date) or null.
+- Write plain words for every measurement ("strongest gust", "dust"); never write JSON key names or field names.
+- Round every measurement to a whole number (20.5 km/h → 21 km/h). Do not mention the score.
+- Every string must be written in ${language}.
+- "summary" is one or two short sentences: the main reason this place suits this night.
+- Packing must follow from the given conditions and group size; do not suggest lodging or facilities.
 Reply with ONE JSON object and nothing else:
 {"summary": string, "reasons": string[] (max 4), "cautions": string[] (max 4), "packing": string[] (max 6, specific to these conditions and group size), "preparations": string[] (max 4), "alternative": {"slug": string, "date": "YYYY-MM-DD", "why": string} | null}`;
 
@@ -107,12 +113,16 @@ Reply with ONE JSON object and nothing else:
     const out = result.data;
     const allowed = [...collectNumbers(facts), 1, 2, 3, 4];
     let dropped = 0;
-    const guard = (list: string[]) => {
+    const guard = (input: string[]) => {
+      // Wrong-language lines and internal names never reach the visitor.
+      const list = input.filter((x) => !hasInternalKey(x) && inLanguage(x));
+      dropped += input.length - list.length;
       const r = keepGrounded(list, allowed);
       dropped += r.dropped;
       return r.kept;
     };
-    const summaryOk = keepGrounded([out.summary], allowed).kept.length === 1;
+    // A summary must be a real sentence, not a label like "complete assessment".
+    const summaryOk = out.summary.trim().split(/\s+/u).length >= 5 && !hasInternalKey(out.summary) && inLanguage(out.summary) && keepGrounded([out.summary], allowed).kept.length === 1;
     if (!summaryOk) dropped += 1;
 
     let alternative = out.alternative ?? null;

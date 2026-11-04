@@ -1,86 +1,109 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, LoaderCircle, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlanResponse } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { getDestination } from "@/lib/destinations";
 import { formatNight } from "@/lib/i18n";
 import { DEFAULT_PREFS, loadPrefs, savePrefs } from "@/lib/prefs-storage";
-import { bestPerNight, nightReasons } from "@/lib/reasons";
+import { bestPerNight, rankNight } from "@/lib/reasons";
 import type { Experience } from "@/lib/types";
+import { DEFAULT_TUNE, tuneFromParams, tuneKey, type Tune } from "@/lib/tune";
+import { HomePlaces } from "./home-places";
+import { HomePlan, PlanSuggestion } from "./home-plan";
+import { SaduBand } from "./sadu-band";
 import { useI18n } from "./locale-provider";
 import { ModeSwitch } from "./mode-switch";
 import { NightScene } from "./night-scene";
-import { NightSummary } from "./night-summary";
-import { NightWindow } from "./night-window";
-import { HomePlanner, type PlanStep } from "./home-planner";
-import { ReasonList, RecommendationCard } from "./recommendation-card";
-import { SaduBand } from "./sadu-band";
-import { SevenNights } from "./seven-nights";
+import { PlanRail, type RailStep } from "./plan-rail";
+import { RecommendationCard } from "./recommendation-card";
+import { SevenNights, WeekLegend } from "./seven-nights";
+import { TripChat } from "./trip-chat";
 import { ErrorState, Skeleton } from "./ui";
 
 type Load = { s: "loading" } | { s: "error"; code: ClientErrorCode } | { s: "ok"; data: PlanResponse };
-
+type Step = 1 | 2 | 3 | 4;
+const SECTION: Record<Step, string> = { 1: "night", 2: "week", 3: "places", 4: "plan" };
 /**
- * The MVP in one scroll: the answer for the chosen activity, the week, why the night suits it,
- * and a short planner that ends in a plan. /plan keeps the full options.
+ * The whole MVP on one night: pick the activity and night (hero + week), the place (map + list),
+ * then the plan. The rail is both progress and section navigation. `reached` is the step the
+ * visitor is on: earlier steps are decided; changing one sends the later ones back to "to do".
+ * One night and one place drive everything below them, so nothing can disagree.
  */
 export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   const { locale, dict } = useI18n();
   const t = dict.home;
   const [mode, setMode] = useState<Experience>(initialMode ?? "kashta");
-  const [loads, setLoads] = useState<Partial<Record<Experience, Load>>>({});
+  const [loads, setLoads] = useState<Record<string, Load>>({});
+  const [tune, setTune] = useState<Tune>(DEFAULT_TUNE);
   const [picked, setPicked] = useState<string | null>(null);
-  // The homepage planner shares this page's mode and night; it adds a place and a step.
-  const [planPlace, setPlanPlace] = useState<string | null>(null);
-  const [planStep, setPlanStep] = useState<PlanStep>(1);
-  // Until the visitor edits, the planner shows the hero's choices as a summary.
-  const [planEditing, setPlanEditing] = useState(false);
-  const started = useRef(new Set<Experience>());
+  const [place, setPlace] = useState<string | null>(null);
+  // Activity and night are decided in the hero (defaults: the current mode and the best night), so
+  // the trail starts at the place; 4 means the plan has been used.
+  const [reached, setReached] = useState<Step>(3);
+  const [groupSize, setGroupSize] = useState(DEFAULT_PREFS.groupSize);
+  const started = useRef(new Set<string>());
+  const restoring = useRef(false);
+  const asked = useRef<{ night: string | null; place: string | null } | null>(null);
+  const [linkNote, setLinkNote] = useState(false);
+  const heroRef = useRef<HTMLElement>(null);
 
-  const load = useCallback(async (experience: Experience, force = false) => {
-    if (started.current.has(experience) && !force) return;
-    started.current.add(experience);
-    setLoads((l) => ({ ...l, [experience]: { s: "loading" } }));
+  // Scored by the app's own planner with these preferences; the assistant can only change inputs.
+  const load = useCallback(async (experience: Experience, tuned: Tune, force = false) => {
+    const key = tuneKey(experience, tuned);
+    if (started.current.has(key) && !force) return;
+    started.current.add(key);
+    setLoads((l) => ({ ...l, [key]: { s: "loading" } }));
     const res = await callApi<PlanResponse>("/api/plan", {
       method: "POST",
-      body: JSON.stringify({ ...DEFAULT_PREFS, experience, date: "flexible" }),
+      body: JSON.stringify({ ...DEFAULT_PREFS, ...tuned, experience, date: "flexible" }),
     });
-    setLoads((l) => ({ ...l, [experience]: res.ok ? { s: "ok", data: res.data } : { s: "error", code: res.code } }));
+    setLoads((l) => ({ ...l, [key]: res.ok ? { s: "ok", data: res.data } : { s: "error", code: res.code } }));
+  }, []);
+
+  /** Read the plan from the address: first load, reload, Back from a place page, or history. */
+  const readUrl = useCallback((fallbackGroup: number) => {
+    const sp = new URLSearchParams(window.location.search);
+    const n = sp.get("night");
+    const pl = sp.get("place");
+    const st = Number(sp.get("step"));
+    const g = Number(sp.get("group"));
+    setPicked(n && /^\d{4}-\d{2}-\d{2}$/.test(n) ? n : null);
+    // Remember what a link asked for, to say so if the forecast can no longer honour it.
+    asked.current = st === 4 && (n || pl) ? { night: n, place: pl } : null;
+    setPlace(pl && /^[a-z0-9-]+$/.test(pl) ? pl : null);
+    setReached(st === 4 ? 4 : 3);
+    // The address omits the default size, so "no group" means the fallback, not "keep the current".
+    setGroupSize(Number.isInteger(g) && g >= 1 && g <= 40 ? g : fallbackGroup);
+    const tuned = tuneFromParams(sp);
+    setTune(tuned);
+    return { restore: st === 4, tuned };
   }, []);
 
   useEffect(() => {
-    // A ?mode= link wins; otherwise start in the mode the visitor used last.
-    const start = initialMode ?? loadPrefs().experience;
-    if (initialMode) savePrefs({ ...loadPrefs(), experience: initialMode });
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // A ?mode= link wins for this visit; it isn't saved, so a shared link never replaces the
+    // visitor's own preferences. Only their own choices are saved.
+    const saved = loadPrefs();
+    const start = initialMode ?? saved.experience;
+    /* eslint-disable react-hooks/set-state-in-effect */
     setMode(start);
-    void load(start);
-  }, [initialMode, load]);
+    const first = readUrl(saved.groupSize);
+    restoring.current = first.restore;
+    /* eslint-enable react-hooks/set-state-in-effect */
+    void load(start, first.tuned);
+    const onPop = () => {
+      const m = new URLSearchParams(window.location.search).get("mode");
+      const back = readUrl(loadPrefs().groupSize);
+      const nextMode = m === "kashta" || m === "stars" ? m : null;
+      if (nextMode) setMode(nextMode);
+      void load(nextMode ?? start, back.tuned);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [initialMode, load, readUrl]);
 
-  const choose = (next: Experience, from: "hero" | "planner" = "hero") => {
-    setMode(next);
-    setPicked(null);
-    setPlanPlace(null);
-    // From the hero, a new activity means new picks: back to the summary rather than a stale
-    // step 4. From the planner's own tile, stay in the flow and move on to the night.
-    if (from === "hero") {
-      setPlanEditing(false);
-      setPlanStep(1);
-    } else {
-      setPlanEditing(true);
-      setPlanStep(2);
-    }
-    savePrefs({ ...loadPrefs(), experience: next });
-    // Keep the address shareable: /?mode=stars opens the same view.
-    const url = new URL(window.location.href);
-    url.searchParams.set("mode", next);
-    window.history.replaceState(null, "", url);
-    void load(next);
-  };
-
-  const state = loads[mode] ?? { s: "loading" };
+  const state = loads[tuneKey(mode, tune)] ?? { s: "loading" };
   const data = state.s === "ok" ? state.data : null;
   const nights = data ? bestPerNight(data) : [];
   const bestNight = nights.reduce<string | null>((top, n) => {
@@ -88,38 +111,158 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     const current = nights.find((x) => x.night === top)?.best?.score ?? -1;
     return (n.best.score ?? -1) > current ? n.night : top;
   }, null);
-  const shownNight = picked ?? bestNight;
-  const shown = nights.find((n) => n.night === shownNight)?.best;
-  const metricsFor = (night: string) => {
-    if (!data) return undefined;
-    const row = nights.find((n) => n.night === night)?.best ?? data.results.find((r) => r.date === night);
-    return row ? data.metrics[`${row.slug}|${night}`] : undefined;
+  // Only a night the forecast scores counts (an old address or the helper may name another).
+  const night = picked && nights.some((n) => n.night === picked && n.best) ? picked : bestNight;
+  const ranked = data && night ? rankNight(data, night) : [];
+  // One place for the hero, map, list and plan: the visitor's pick if it's ranked tonight, else the night's pick.
+  const chosen = ranked.find((r) => r.slug === place) ?? ranked[0];
+  const chosenDest = chosen ? getDestination(chosen.slug) : undefined;
+  const step: Step = data && chosen ? reached : 3;
+  const prefs = { ...DEFAULT_PREFS, ...tune, experience: mode, groupSize, date: "flexible" as const };
+  // Settings a place page needs to score like this page, and to link back to the same plan.
+  const carry = new URLSearchParams(Object.entries({
+    group: groupSize !== DEFAULT_PREFS.groupSize ? String(groupSize) : "",
+    drive: tune.maxDriveHours !== DEFAULT_TUNE.maxDriveHours ? String(tune.maxDriveHours) : "",
+    temp: tune.tempPref !== DEFAULT_TUNE.tempPref ? tune.tempPref : "",
+    wind: tune.windTolerance !== DEFAULT_TUNE.windTolerance ? tune.windTolerance : "",
+    pri: tune.priorities.join(","),
+    step: reached === 4 ? "4" : "",
+  }).filter(([, v]) => v)).toString();
+  const [explainSignal, setExplainSignal] = useState(0);
+  const [openSignal, setOpenSignal] = useState(0);
+  // "Ask the assistant" from the hero: wide screens bring the trail (and its chat column) into view.
+  const askAssistant = () => {
+    if (window.matchMedia("(min-width: 1200px)").matches) scrollTo(3);
+    setOpenSignal((n) => n + 1);
   };
-  const shownDest = shown ? getDestination(shown.slug) : undefined;
-  const shownHours = shown ? data?.forecasts[shown.slug]?.metrics.find((m) => m.date === shown.date)?.hours : undefined;
-  // Jump into the planner at a step, with the night (and place) already chosen.
-  const planFrom = (slug: string | null, step: PlanStep) => {
-    if (slug) setPlanPlace(slug);
-    setPlanEditing(true);
-    setPlanStep(step);
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    requestAnimationFrame(() => document.getElementById("plan")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }));
-  };
-  const hero = t.heroByMode[mode];
-  const Forward = locale === "ar" ? ChevronLeft : ChevronRight;
-  const heroRef = useRef<HTMLElement>(null);
 
-  // Wind over the dunes: the near sand drifts a little as the hero scrolls out. Pure CSS var,
-  // no layout reads beyond scrollY; disabled when the visitor prefers reduced motion.
+  // Keep the address in step with the plan. Decisions that move forward add a history entry, so
+  // Back steps back through the plan; everything else replaces the current entry.
+  const push = useRef(false);
+  useEffect(() => {
+    if (!data) return;
+    const url = new URL(window.location.href);
+    const set = (k: string, v: string | null) => (v ? url.searchParams.set(k, v) : url.searchParams.delete(k));
+    set("mode", mode);
+    // A used plan pins its night and place, so a bookmark or reload can't drift with the forecast.
+    const used = reached === 4 && !!chosen;
+    set("night", used || (picked && night === picked) ? night : null);
+    set("place", used ? chosen!.slug : place && chosen?.slug === place ? place : null);
+    set("step", reached === 4 ? "4" : null);
+    set("group", groupSize !== DEFAULT_PREFS.groupSize ? String(groupSize) : null);
+    set("drive", tune.maxDriveHours !== DEFAULT_TUNE.maxDriveHours ? String(tune.maxDriveHours) : null);
+    set("temp", tune.tempPref !== DEFAULT_TUNE.tempPref ? tune.tempPref : null);
+    set("wind", tune.windTolerance !== DEFAULT_TUNE.windTolerance ? tune.windTolerance : null);
+    set("pri", tune.priorities.length ? tune.priorities.join(",") : null);
+    url.hash = "";
+    const add = push.current;
+    push.current = false;
+    if (url.href === window.location.href) return;
+    if (add) window.history.pushState(null, "", url);
+    else window.history.replaceState(window.history.state, "", url);
+  }, [data, mode, picked, night, place, chosen, reached, groupSize, tune]);
+
+  const reduce = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const scrollTo = (s: Step) =>
+    requestAnimationFrame(() => {
+      const el = document.getElementById(SECTION[s]);
+      el?.scrollIntoView({ behavior: reduce() ? "auto" : "smooth", block: "start" });
+      el?.querySelector<HTMLElement>("[data-step-focus]")?.focus({ preventScroll: true });
+    });
+
+  // A linked plan whose night has passed or isn't scored (or whose place isn't ranked that night):
+  // show the current pick, and say so instead of swapping silently.
+  useEffect(() => {
+    if (!data || !asked.current) return;
+    const a = asked.current;
+    asked.current = null;
+    setLinkNote(Boolean((a.night && a.night !== night) || (a.place && chosen?.slug !== a.place)));
+  }, [data, night, chosen]);
+
+  // Restored mid-plan: once the forecast is in, return to the step the visitor was on.
+  useEffect(() => {
+    if (!data || !restoring.current) return;
+    restoring.current = false;
+    requestAnimationFrame(() => document.getElementById(SECTION[reached])?.scrollIntoView({ block: "start" }));
+  }, [data, reached]);
+
+  /* Decisions. Each one invalidates only what depends on it. */
+  const chooseMode = (next: Experience) => {
+    push.current = true;
+    setMode(next);
+    setPicked(null);
+    setPlace(null);
+    setReached(3);
+    savePrefs({ ...loadPrefs(), experience: next });
+    void load(next, tune);
+  };
+  /** A new night re-ranks the places; `keepPlace` (from a place's "best night") keeps that place. */
+  const chooseNight = (n: string, keepPlace = false) => {
+    if (n === night) return;
+    push.current = true;
+    setPicked(n);
+    if (!keepPlace) setPlace(null);
+    setReached(3);
+  };
+  const choosePlace = (slug: string) => {
+    setPlace(slug);
+    if (reached > 3) setReached(3);
+  };
+  const advance = (to: Step) => {
+    // Only a real step forward earns a history entry.
+    if (to > reached) push.current = true;
+    setReached((r) => (to > r ? to : r));
+    scrollTo(to);
+  };
+  const changeGroup = (n: number) => {
+    setGroupSize(n);
+    savePrefs({ ...loadPrefs(), groupSize: n });
+  };
+  /** The assistant's changes, applied through the same inputs a visitor can set; the app's planner
+   *  then re-ranks. Changing the activity, night or preferences clears the place, as it would by hand. */
+  const applyChanges = (c: { experience?: Experience; night?: string | null; groupSize?: number; tune?: Partial<Tune> }) => {
+    push.current = true;
+    const m = c.experience ?? mode;
+    const t: Tune = { ...tune, ...c.tune };
+    const retune = tuneKey(m, t) !== tuneKey(mode, tune);
+    if (m !== mode) {
+      setMode(m);
+      savePrefs({ ...loadPrefs(), experience: m });
+    }
+    if (retune) setTune(t);
+    // "night" present (even null = any night) replaces the night; otherwise keep it unless the mode changed.
+    const nightGiven = "night" in c;
+    if (nightGiven || retune) setPicked(nightGiven ? (c.night ?? null) : m === mode ? picked : null);
+    if (nightGiven || retune) setPlace(null);
+    if (c.groupSize) changeGroup(c.groupSize);
+    if (nightGiven || retune) setReached(3);
+    void load(m, t);
+  };
+  /** "Start over": the night, place, group size and tuned preferences go back to the defaults (the
+   *  recommended night and its pick, 5 people), at the place step. The activity stays as the page's
+   *  mode; checklist ticks, the chat and the fetched forecasts are kept. */
+  const startOver = () => {
+    push.current = true;
+    setPicked(null);
+    setPlace(null);
+    setTune(DEFAULT_TUNE);
+    void load(mode, DEFAULT_TUNE);
+    changeGroup(DEFAULT_PREFS.groupSize);
+    setReached(3);
+    scrollTo(1);
+  };
+
+  // Wind over the dunes: the near sand drifts a little as the page scrolls; no layout reads
+  // beyond scrollY, and nothing moves when the visitor prefers reduced motion.
   useEffect(() => {
     const el = heroRef.current;
-    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!el || reduce()) return;
     let raf = 0;
     const onScroll = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         const wind = Math.min(1, Math.max(0, window.scrollY / Math.max(1, el.offsetHeight)));
-        el.style.setProperty("--wind", wind.toFixed(3));
+        document.documentElement.style.setProperty("--wind", wind.toFixed(3));
       });
     };
     onScroll();
@@ -127,18 +270,25 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     return () => { cancelAnimationFrame(raf); window.removeEventListener("scroll", onScroll); };
   }, []);
 
-  return (
-    <div data-mode={mode}>
-      {/* 1 · The answer: the scene for the chosen activity and its best night. */}
-      <section ref={heroRef} className="night-hero home-v3 on-night on-dark" aria-labelledby="hero-title">
-        <NightScene mode={mode} />
-        <div className="frame home-v3-grid">
-          <div className="home-v3-main min-w-0">
-            <ModeSwitch value={mode} onChange={choose} legend={t.modeLegend} />
-            <h1 id="hero-title" className="home-v3-title mt-5">{hero.h1}</h1>
-            <p className="hero-sub mt-2">{hero.sub}</p>
+  const Forward = locale === "ar" ? ChevronLeft : ChevronRight;
+  const railSteps: RailStep[] = [
+    { n: 1, label: dict.plan.steps.activity, value: dict.experience[mode], reachable: true },
+    { n: 2, label: dict.plan.steps.night, value: night ? formatNight(night, locale, { short: true }) : undefined, reachable: !!data },
+    { n: 3, label: dict.plan.steps.place, value: chosenDest?.name[locale], reachable: !!chosen },
+    { n: 4, label: dict.plan.steps.plan, reachable: !!chosen },
+  ];
 
-            <div className="mt-6" aria-live="polite" aria-busy={state.s === "loading"}>
+  return (
+    <div className="home-journey" data-mode={mode} data-step={step}>
+      {/* 1–2 · The night: the scene, the activity, the answer, and the week laid along its ground. */}
+      <section ref={heroRef} id="night" className="night-hero home-v5 on-night on-dark" aria-labelledby="hero-title">
+        <div className="home-v5-stage">
+        <NightScene mode={mode} />
+        <div className="frame home-v5-grid">
+          <div className="home-v4-main min-w-0">
+            <h1 id="hero-title" className="home-v3-title" tabIndex={-1} data-step-focus>{t.heroByMode[mode].h1}</h1>
+            <ModeSwitch className="mt-5" value={mode} onChange={chooseMode} legend={t.modeLegend} />
+            <div className="home-v4-answer" aria-live="polite" aria-busy={state.s === "loading"}>
               {state.s === "loading" && (
                 <div className="rec-card on-night" data-mode={mode}>
                   <p className="small muted flex items-center gap-2"><LoaderCircle aria-hidden size={16} className="animate-spin" />{dict.common.loading}</p>
@@ -146,115 +296,120 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
                   <Skeleton className="mt-4 h-5 w-1/2" />
                 </div>
               )}
-              {state.s === "error" && <ErrorState code={state.code} onRetry={() => load(mode, true)} className="!bg-sky-2 rounded-xl" />}
-              {data && shown && (
+              {state.s === "error" && <ErrorState code={state.code} onRetry={() => load(mode, tune, true)} className="!bg-sky-2 rounded-xl" />}
+              {data && chosen && night && (
                 <RecommendationCard
-                  key={`${mode}-${shown.slug}-${shown.date}`}
+                  key={`${mode}-${chosen.slug}-${chosen.date}`}
                   compact
-                  row={shown}
-                  metrics={data.metrics[`${shown.slug}|${shown.date}`]}
+                  facts={false}
+                  row={chosen}
+                  metrics={data.metrics[`${chosen.slug}|${chosen.date}`]}
                   experience={mode}
-                  kicker={shownNight === bestNight ? t.best : t.nightPick}
+                  kicker={night === bestNight && chosen.slug === ranked[0]?.slug ? t.best : t.nightPick}
                   actions={
-                    <button type="button" className="btn btn-accent" onClick={() => planFrom(shown.slug, 4)}>
-                      {t.planNight}
+                    <button type="button" className="btn btn-accent" onClick={() => advance(3)}>
+                      {t.toPlaces}
                       <Forward aria-hidden size={18} />
                     </button>
                   }
                 />
               )}
-              {data && !shown && (
+              {data && !chosen && (
                 <div className="rec-card on-night" data-mode={mode} role="status">
                   <p className="lead">{t.noneTitle}</p>
                   <p className="muted mt-2">{t.noneBody}</p>
                 </div>
               )}
             </div>
-            <p className="small muted mt-4 flex items-center gap-2">
-              <MapPin aria-hidden size={15} />
-              {t.scopeNote}
-            </p>
+            <button type="button" className="hero-ask" onClick={askAssistant}>
+              <Sparkles aria-hidden size={16} />{t.chat.ask}
+            </button>
+            {/* Phones: a window onto the camp or the sky under the answer. */}
+            <div className="home-v4-window" aria-hidden />
           </div>
-          {/* Phones: a window onto the scene between the answer and the week. */}
-          <div className="home-v3-window" aria-hidden />
         </div>
-      </section>
 
-      {/* 2 · The week, then 3 · why the chosen night suits the activity. */}
-      <section id="nights" className="home-v3-week on-night on-dark" aria-labelledby="week-title">
-        <div className="frame grid gap-8 py-7 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:gap-12">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-              <h2 id="week-title" className="lead font-medium">{t.weekShort}</h2>
-              {shownNight && <p className="small muted">{formatNight(shownNight, locale)}</p>}
-            </div>
-            <div className="mt-4">
-              {data ? (
-                <SevenNights compact nights={nights} metricsFor={metricsFor} selected={shownNight} bestNight={bestNight} onSelect={setPicked} />
-              ) : (
-                <div className="seven seven--compact" aria-hidden>
-                  {Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
-                </div>
-              )}
-            </div>
-            <ul className="week-legend small muted mt-4">
-              <li><span className="week-legend-bar" aria-hidden />{t.weekBars[mode]} {t.weekTap}</li>
-              <li><span className="week-legend-na" aria-hidden />{t.weekIncomplete}</li>
-            </ul>
-          </div>
-
-          {data && shown && (
-            <div className="why-panel min-w-0" aria-labelledby="why-title">
-              <h2 id="why-title" className="lead font-medium">{t.whyTitle}</h2>
-              <ReasonList className="mt-4" reasons={nightReasons(shown, data.metrics[`${shown.slug}|${shown.date}`], 3)} />
-              {shownDest && shownHours && <NightWindow className="mt-5" date={shown.date} lat={shownDest.lat} lon={shownDest.lon} hours={shownHours} mode={mode} />}
-              <details className="why-more mt-4">
-                <summary className="small">{t.nightDetails}</summary>
-                <div className="mt-3"><NightSummary metrics={metricsFor(shown.date)} experience={mode} /></div>
-              </details>
-            </div>
-          )}
         </div>
-        <p className="frame small muted pb-6 flex flex-wrap gap-x-4 gap-y-1">
-          {data?.forecastFetchedAt && (
-            <span>
-              {dict.common.forecastBy} · {dict.common.updated}{" "}
-              <time className="num" dateTime={data.forecastFetchedAt}>
-                {new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Riyadh" }).format(new Date(data.forecastFetchedAt))}
-              </time>
-            </span>
-          )}
-          {data && !data.airQuality.available && <span>{dict.plan.airDown}</span>}
-          <span>{t.illustration}</span>
-        </p>
-      </section>
 
-      <SaduBand />
-
-      {/* 4 · The planner: activity → night → place → plan, all on this page. */}
-      <section id="plan" className="home-v3-cta" aria-labelledby="plan-title">
-        <div className="frame py-[clamp(2.5rem,5vw,4rem)]">
-          <h2 id="plan-title" className="sub">{t.ctaTitle[mode]}</h2>
-          <p className="mt-1 max-w-[56ch] text-ink-2">{t.planLeadHome}</p>
-          <div className="mt-6">
-            <HomePlanner
-              mode={mode}
-              onMode={(m) => choose(m, "planner")}
-              data={data}
-              perNight={nights}
-              bestNight={bestNight}
-              night={shownNight}
-              onNight={(n) => { setPicked(n); setPlanPlace(null); }}
-              place={planPlace}
-              onPlace={setPlanPlace}
-              step={planStep}
-              onStep={setPlanStep}
-              summary={!planEditing}
-              onEdit={() => setPlanEditing(true)}
-            />
+        {/* The week sits on the dunes of the same scene: picking a night re-ranks everything below. */}
+        <div id="week" className="home-v5-week" aria-labelledby="week-title">
+          <div className="frame home-v5-week-grid">
+            <div className="min-w-0">
+              <h2 id="week-title" className="home-h2 home-h2--sm" tabIndex={-1} data-step-focus>{t.weekShort}</h2>
+              <div className="mt-3">
+                {data ? (
+                  <SevenNights compact nights={nights} metricsFor={(n) => { const r = nights.find((x) => x.night === n)?.best; return r ? data.metrics[`${r.slug}|${n}`] : undefined; }} selected={night} bestNight={bestNight} onSelect={chooseNight} />
+                ) : (
+                  <div className="seven seven--compact" aria-hidden>{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
+                )}
+              </div>
+              {data && <WeekLegend className="muted mt-3" nights={nights} mode={mode} />}
+            </div>
           </div>
         </div>
       </section>
+
+      {/* 3–4 · The outing: a woven edge, then the trail from place to plan. The rail stays in view
+          only while this part of the page is on screen. */}
+      <div className="home-trail">
+        <SaduBand className="home-trail-sadu" />
+        <div className="home-trail-grid">
+        <div className="home-trail-main min-w-0">
+        <PlanRail variant="night" steps={railSteps} step={step} onStep={(n) => scrollTo(n)} label={t.journey} navigate />
+
+        <section id="places" className="home-v4-places on-night on-dark" aria-labelledby="places-title">
+          <div className="frame pb-12 pt-8">
+            {data && night && chosen ? (
+              <HomePlaces carry={carry} mode={mode} data={data} night={night} ranked={ranked} selected={chosen.slug} onSelect={choosePlace} onNight={(n) => { if (chosen) setPlace(chosen.slug); chooseNight(n, true); }} onPlan={() => advance(4)} />
+            ) : (
+              <h2 id="places-title" className="home-h2" tabIndex={-1} data-step-focus>{t.placesHeading}</h2>
+            )}
+          </div>
+        </section>
+
+        {/* 4 · The plan, at first light. Until a place is used, it shows the suggestion, clearly labelled. */}
+        <section id="plan" className="home-v4-plan" aria-labelledby="plan-title">
+          <div className="frame pb-[clamp(2.5rem,5vw,4rem)]">
+            <h2 id="plan-title" className="home-h2" tabIndex={-1} data-step-focus>{t.summaryTitle}</h2>
+            {linkNote && <p role="status" className="plan-note small mt-3">{t.linkChanged}</p>}
+            <div className="mt-5">
+              {data && chosen && step === 4 ? (
+                <HomePlan carry={carry} key={`${chosen.slug}-${chosen.date}`} mode={mode} row={chosen} data={data} groupSize={groupSize} onGroupSize={changeGroup} onStartOver={startOver} onChangePlace={() => scrollTo(3)} onExplain={() => setExplainSignal((n) => n + 1)} />
+              ) : data && chosen ? (
+                <PlanSuggestion mode={mode} row={chosen} data={data} picked={!!place && place === chosen.slug && chosen.slug !== ranked[0]?.slug} onUse={() => advance(4)} onChange={() => scrollTo(3)} />
+              ) : null}
+            </div>
+            {data?.forecastFetchedAt && (
+              <p className="small mt-10 text-ink-2">
+                {dict.common.forecastBy} · {dict.common.updated}{" "}
+                <time className="num" dateTime={data.forecastFetchedAt}>
+                  {new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-nu-latn" : "en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Riyadh" }).format(new Date(data.forecastFetchedAt))}
+                </time>
+                {!data.airQuality.available && <> · {dict.plan.airDown}</>}
+                {" · "}{t.illustration}
+              </p>
+            )}
+          </div>
+        </section>
+        </div>
+
+        {/* The assistant stays beside every step (docked at the bottom on smaller screens). */}
+        <TripChat
+          mode={mode}
+          prefs={prefs}
+          data={data}
+          dataKey={tuneKey(mode, tune)}
+          perNight={nights}
+          chosen={chosen}
+          night={night}
+          explainSignal={explainSignal}
+          openSignal={openSignal}
+          onApply={applyChanges}
+          onUse={() => advance(4)}
+          onPick={(slug, date) => { push.current = true; setPicked(date); setPlace(slug); setReached(3); }}
+        />
+        </div>
+      </div>
     </div>
   );
 }

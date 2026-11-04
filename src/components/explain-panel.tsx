@@ -101,7 +101,7 @@ function ExplainPanelContent({
       <div className="flex flex-wrap items-center gap-4">
         <button
           type="button"
-          className={compact ? "btn-quiet" : "btn"}
+          className={compact ? "helper-chip helper-ask" : "btn"}
           onClick={run}
           disabled={ai !== true || state.s === "loading"}
           aria-describedby={ai === false ? `ai-off-${slug}` : undefined}

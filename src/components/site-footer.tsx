@@ -24,11 +24,6 @@ export function SiteFooter() {
                 </Link>
               </li>
               <li>
-                <Link className="link inline-flex min-h-11 items-center" href="/destinations">
-                  {dict.nav.destinations}
-                </Link>
-              </li>
-              <li>
                 <Link className="link inline-flex min-h-11 items-center" href="/about">
                   {dict.nav.method}
                 </Link>
