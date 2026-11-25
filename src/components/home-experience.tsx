@@ -157,7 +157,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
       // While the new forecast loads, the address already shows the chosen activity and city;
       // nothing is removed, so a shared plan arriving on first load stays intact.
       url.searchParams.set("mode", mode);
-      if (tune.city !== DEFAULT_TUNE.city) url.searchParams.set("city", tune.city);
+      url.searchParams.set("city", tune.city);
       if (url.href === window.location.href) return;
       // A decision (new activity or city) gets its own history entry now, so Back still works.
       if (push.current) { push.current = false; window.history.pushState(null, "", url); }
@@ -170,8 +170,8 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     set("night", used || (picked && night === picked) ? night : null);
     set("place", used ? chosen!.slug : place && chosen?.slug === place ? place : null);
     set("step", reached === 4 ? "4" : null);
-    // A used plan spells out city and group, so a reload or a shared link keeps the same trip.
-    set("city", used || tune.city !== DEFAULT_TUNE.city ? tune.city : null);
+    // The city is always spelled out, so Back and reload restore it; a used plan also pins the group.
+    set("city", tune.city);
     set("group", used || groupSize !== DEFAULT_PREFS.groupSize ? String(groupSize) : null);
     set("drive", tune.maxDriveHours !== DEFAULT_TUNE.maxDriveHours ? String(tune.maxDriveHours) : null);
     set("temp", tune.tempPref !== DEFAULT_TUNE.tempPref ? tune.tempPref : null);
