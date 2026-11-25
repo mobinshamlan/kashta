@@ -49,7 +49,7 @@ export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onPl
     onSelect(slug);
     if (ranked.findIndex((r) => r.slug === slug) >= SHORT) setAll(true);
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // Only scroll on phones, where the row sits below the map; keep keyboard focus on the map.
+    // Only scroll on phones, where the map sits below the list; keep keyboard focus on the map.
     if (window.matchMedia("(max-width: 1023px)").matches)
       requestAnimationFrame(() => document.getElementById("place-panel")?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" }));
   };
