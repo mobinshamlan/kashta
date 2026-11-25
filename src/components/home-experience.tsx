@@ -48,6 +48,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   const [groupSize, setGroupSize] = useState(DEFAULT_PREFS.groupSize);
   const started = useRef(new Set<string>());
   const restoring = useRef(false);
+  const jumpTo = useRef<string | null>(null);
   const asked = useRef<{ night: string | null; place: string | null } | null>(null);
   const [linkNote, setLinkNote] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
@@ -94,6 +95,9 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     setMode(start);
     const first = readUrl(saved.groupSize, saved.city);
     restoring.current = first.restore;
+    // A link to a section (e.g. /destinations → /#places): go there once the forecast is in.
+    const hash = window.location.hash.slice(1);
+    jumpTo.current = hash === "places" || hash === "plan" || hash === "week" ? hash : null;
     /* eslint-enable react-hooks/set-state-in-effect */
     void load(start, first.tuned);
     const onPop = () => {
@@ -187,6 +191,14 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
 
   // Restored mid-plan: once the forecast is in, return to the step the visitor was on.
   useEffect(() => {
+    if (data && jumpTo.current) {
+      const id = jumpTo.current;
+      jumpTo.current = null;
+      if (!restoring.current) {
+        requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: "start" }));
+        return;
+      }
+    }
     if (!data || !restoring.current) return;
     restoring.current = false;
     requestAnimationFrame(() => document.getElementById(SECTION[reached])?.scrollIntoView({ block: "start" }));
@@ -422,7 +434,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
             {linkNote && <p role="status" className="plan-note small mt-3">{t.linkChanged}</p>}
             <div className="mt-5">
               {data && chosen && step === 4 ? (
-                <HomePlan carry={carry} city={tune.city} key={`${chosen.slug}-${chosen.date}`} mode={mode} row={chosen} data={data} groupSize={groupSize} onGroupSize={changeGroup} onStartOver={startOver} onChangePlace={() => scrollTo(3)} onExplain={() => setExplainSignal((n) => n + 1)} />
+                <HomePlan carry={carry} city={tune.city} key={`${chosen.slug}-${chosen.date}`} mode={mode} row={chosen} data={data} groupSize={groupSize} onGroupSize={changeGroup} onStartOver={startOver} onChangePlace={() => { push.current = true; setReached(3); scrollTo(3); }} onExplain={() => setExplainSignal((n) => n + 1)} />
               ) : data && chosen ? (
                 <PlanSuggestion mode={mode} row={chosen} picked={!!place && place === chosen.slug && chosen.slug !== ranked[0]?.slug} onUse={() => advance(4)} onChange={() => scrollTo(3)} />
               ) : (
