@@ -131,7 +131,7 @@ export function CityPicker({
                     type="button"
                     className="city-option"
                     aria-pressed={c === value}
-                    aria-label={`${dict.common.cities[c]}، ${t.cityReach(n, maxDriveHours)}`}
+                    aria-label={`${dict.common.cities[c]}${locale === "ar" ? "، " : ", "}${t.cityReach(n, maxDriveHours)}`}
                     onClick={() => choose(c)}
                     onPointerEnter={() => setPreview(c)}
                     onPointerLeave={() => setPreview(null)}

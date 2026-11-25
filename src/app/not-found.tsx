@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getDict } from "@/lib/locale";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { locale } = await getDict();
+  return { title: locale === "ar" ? "الصفحة غير موجودة" : "Page not found" };
+}
 
 export default async function NotFound() {
   const { locale } = await getDict();

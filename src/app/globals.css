@@ -1599,7 +1599,7 @@
   .trip-chat-close { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 999px; color: var(--color-star-2); }
   .trip-chat-close:hover { background: rgb(255 255 255 / 8%); }
   .trip-chat-log { flex: 1 1 auto; min-height: 8rem; overflow-y: auto; overscroll-behavior: contain; padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.7rem; scroll-behavior: smooth; }
-  .chat-msg { max-width: 92%; padding: 0.65rem 0.85rem; border-radius: 14px; font-size: 0.95rem; line-height: 1.6; animation: chat-in 260ms var(--ease-out-soft, ease) both; }
+  .chat-msg { max-width: 92%; overflow-wrap: anywhere; padding: 0.65rem 0.85rem; border-radius: 14px; font-size: 0.95rem; line-height: 1.6; animation: chat-in 260ms var(--ease-out-soft, ease) both; }
   .chat-msg--bot { align-self: flex-start; background: rgb(255 255 255 / 6%); border: 1px solid rgb(255 255 255 / 8%); border-start-start-radius: 4px; }
   .chat-msg--user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 24%, #1a2340); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-start-end-radius: 4px; }
   @keyframes chat-in { from { opacity: 0; transform: translateY(4px); } }
@@ -1680,6 +1680,8 @@
   }
   .plan-done { align-items: start; }
   .plan-result { padding: clamp(1.25rem, 3vw, 1.75rem); border: 1px solid rgb(255 255 255 / 11%); }
+  .plan-result-state { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.9rem; }
+  .plan-result-state > svg { flex: none; margin-inline-end: -0.55rem; }
   .plan-done .before-go {
     padding: 1.1rem 1.2rem; color: var(--color-star);
     background: rgb(255 255 255 / 5%); border-color: rgb(255 255 255 / 12%);
