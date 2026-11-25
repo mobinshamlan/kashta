@@ -93,7 +93,6 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     if (msg.length < 4 || busy) return;
     push({ from: "user", text: msg });
     setText("");
-    setShowExamples(false);
     setBusy("interpret");
     // The plan on screen goes along, so a question is answered from it (the server recomputes the numbers).
     const context = chosen ? { slug: chosen.slug, date: chosen.date, prefs: { ...prefs, date: chosen.date } } : null;
