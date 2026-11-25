@@ -119,6 +119,8 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     const current = nights.find((x) => x.night === top)?.best?.score ?? -1;
     return (n.best.score ?? -1) > current ? n.night : top;
   }, null);
+  // No "Best" tag on the week when even the top night is unsuitable.
+  const bestTag = bestNight && rating(nights.find((n) => n.night === bestNight)?.best?.score ?? null) !== "poor" ? bestNight : null;
   // Only a night the forecast scores counts (an old address or the helper may name another).
   const night = picked && nights.some((n) => n.night === picked && n.best) ? picked : bestNight;
   const ranked = data && night ? rankNight(data, night, tune.city) : [];
@@ -158,8 +160,9 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
     set("night", used || (picked && night === picked) ? night : null);
     set("place", used ? chosen!.slug : place && chosen?.slug === place ? place : null);
     set("step", reached === 4 ? "4" : null);
-    set("city", tune.city !== DEFAULT_TUNE.city ? tune.city : null);
-    set("group", groupSize !== DEFAULT_PREFS.groupSize ? String(groupSize) : null);
+    // A used plan spells out city and group, so a reload or a shared link keeps the same trip.
+    set("city", used || tune.city !== DEFAULT_TUNE.city ? tune.city : null);
+    set("group", used || groupSize !== DEFAULT_PREFS.groupSize ? String(groupSize) : null);
     set("drive", tune.maxDriveHours !== DEFAULT_TUNE.maxDriveHours ? String(tune.maxDriveHours) : null);
     set("temp", tune.tempPref !== DEFAULT_TUNE.tempPref ? tune.tempPref : null);
     set("wind", tune.windTolerance !== DEFAULT_TUNE.windTolerance ? tune.windTolerance : null);
@@ -390,7 +393,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
               {data && <p className="small mt-3 text-star-2">{t.weekRated(nights.filter((n) => n.best).length, nights.length)}</p>}
               <div className="mt-3">
                 {data ? (
-                  <SevenNights compact nights={nights} metricsFor={(n) => { const r = nights.find((x) => x.night === n)?.best; return r ? data.metrics[`${r.slug}|${n}`] : undefined; }} selected={night} bestNight={bestNight} onSelect={chooseNight} />
+                  <SevenNights compact nights={nights} metricsFor={(n) => { const r = nights.find((x) => x.night === n)?.best; return r ? data.metrics[`${r.slug}|${n}`] : undefined; }} selected={night} bestNight={bestTag} onSelect={chooseNight} />
                 ) : state.s === "loading" && (
                   <div className="seven seven--compact" aria-hidden>{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
                 )}

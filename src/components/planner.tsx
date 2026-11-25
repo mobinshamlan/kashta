@@ -609,7 +609,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
         {step === 2 && data && data.considered.length > 0 && (
           <div className="mt-6">
             <div className="on-night on-dark rounded-[18px] p-4 md:p-6">
-              <SevenNights compact nights={perNight} metricsFor={metricsFor} selected={chosenNight} bestNight={bestNight} onSelect={(n) => { setNight(n); setSelected(null); }} />
+              <SevenNights compact nights={perNight} metricsFor={metricsFor} selected={chosenNight} bestNight={bestNight && rating(perNight.find((n) => n.night === bestNight)?.best?.score ?? null) !== "poor" ? bestNight : null} onSelect={(n) => { setNight(n); setSelected(null); }} />
               {chosenNight && <p className="small mt-4 muted">{formatNight(chosenNight, locale)}</p>}
             </div>
             {/* Same legend as the homepage: what a tall bar and "incomplete" mean. */}
