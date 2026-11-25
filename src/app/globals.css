@@ -852,7 +852,7 @@
   .lang-chip:hover { background: color-mix(in srgb, currentColor 10%, transparent); border-color: currentColor; }
 
   /* Enough scene to recognise the activity, not a poster. */
-  .mode-tile-art { aspect-ratio: auto; height: clamp(8.5rem, 13vw, 11rem); }
+  .mode-tile-art { aspect-ratio: auto; height: clamp(7.5rem, 10vw, 8.5rem); }
   @media (max-width: 639px) {
     .mode-tile-art { height: 7.5rem; }
     .mode-tile-text { padding: 0.7rem 0.8rem 0.8rem; }
