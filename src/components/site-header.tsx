@@ -60,7 +60,7 @@ export function SiteHeader() {
 
   const links = [
     { href: "/", label: dict.nav.nights },
-    { href: "/#plan", label: dict.nav.plan },
+    { href: "/plan", label: dict.nav.plan },
     { href: "/about", label: dict.nav.method },
   ];
 
