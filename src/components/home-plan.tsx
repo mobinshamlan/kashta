@@ -7,7 +7,6 @@ import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { buildChecklist } from "@/lib/checklist";
 import { estimateDrive, getDestination } from "@/lib/destinations";
 import { approxHours, formatNight } from "@/lib/i18n";
-import { DEFAULT_PREFS } from "@/lib/prefs-storage";
 import { rating } from "@/lib/score";
 import type { CityId, Experience } from "@/lib/types";
 import { useI18n } from "./locale-provider";
@@ -95,7 +94,10 @@ export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver,
     url.searchParams.set("night", row.date);
     url.searchParams.set("place", row.slug);
     url.searchParams.set("step", "4");
-    if (groupSize !== DEFAULT_PREFS.groupSize) url.searchParams.set("group", String(groupSize));
+    // Always spell out city and group, even at their defaults, so the recipient's own saved
+    // preferences can't swap in a different start city or group size.
+    url.searchParams.set("city", city);
+    url.searchParams.set("group", String(groupSize));
     url.hash = "plan";
     const link = url.href;
     try {
