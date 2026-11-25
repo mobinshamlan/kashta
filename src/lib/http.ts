@@ -74,7 +74,7 @@ export async function readJson(request: Request): Promise<unknown> {
  */
 const hits = new Map<string, number[]>();
 let lastRateLimitSweep = 0;
-export function rateLimited(request: Request, limit = 12, windowMs = 60_000): boolean {
+export function rateLimited(request: Request, limit = 20, windowMs = 60_000): boolean {
   // On Vercel this header is set by the platform and cannot be spoofed by the client.
   const ip =
     request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||

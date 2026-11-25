@@ -33,7 +33,7 @@ Fields:
 - "groupSize": integer number of people (e.g. "حنا خمسة" = 5).
 - "tempPref": "cool" | "mild" | "warm" — the evening temperature they want.
 - "windTolerance": "low" (they hate wind / wind matters a lot) | "medium" | "high" (wind does not bother them).
-- "maxDriveHours": number, maximum one-way driving hours (1.5–12).
+- "maxDriveHours": number, maximum one-way driving hours (1.5–12). "Closer", "one hour max", "أقرب" and similar are plan changes, not questions: set it to the number they said (the app keeps it within 1.5–12).
 - "date": "flexible" for "هالأسبوع", "هالاسبوع", "هذا الأسبوع", "this week" or any night in the coming week; otherwise one date from the calendar below when they name a specific day ("الخميس", "tonight", "بكرة"). Do not mark a recognized week phrase unclear.
   Nights are dated by the evening they start. In Saudi Arabic «ليلة <day>» means the night BEFORE that day: «ليلة الجمعة» = the Thursday evening date, «ليلة السبت» = the Friday evening date. A bare day name («يوم الخميس», «الخميس») or English "Friday night" means that day's own evening.
 - "priorities": up to 3 of "temp","wind","rain","dust","clouds","moon" that they said matter most.
