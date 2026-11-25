@@ -581,11 +581,12 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
               ))}
             </div>
             <CityPicker className="mt-6" tone="sand" value={prefs.city} onChange={changeCity} experience={prefs.experience} maxDriveHours={prefs.maxDriveHours} />
-            {helper}
+            {/* The main way forward comes first; the helper is optional. */}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button type="button" className="btn plan-go" onClick={() => goTo(2)}>{t.toNight}</button>
               {data && pickForNight && <button type="button" className="btn-quiet" onClick={() => goTo(4)}>{t.takeBest}</button>}
             </div>
+            {helper}
           </fieldset>
         )}
 
