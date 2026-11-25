@@ -298,6 +298,9 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
   // used share link or description isn't applied again over later changes.
   useEffect(() => {
     if (!data) return;
+    // An opened share link stays in the address until the visitor changes a setting, so a reload
+    // shows the sender's trip and not the visitor's own saved preferences.
+    if (initialShare && samePlanPrefs({ ...initialShare.prefs, date: "flexible" }, prefs)) return;
     const url = new URL(window.location.href);
     ["share", "q", "destination", "night", "place", "exp"].forEach((k) => url.searchParams.delete(k));
     [...url.searchParams.keys()].filter((k) => k !== "exp").forEach((k) => url.searchParams.delete(k));
@@ -307,7 +310,7 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
       url.searchParams.set("place", chosenRow.slug);
     }
     if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
-  }, [data, prefs.experience, step, chosenRow]);
+  }, [data, prefs, step, chosenRow, initialShare]);
   const placeHref = (row: ScoreRow) => `/destinations/${row.slug}?night=${row.date}&exp=${prefs.experience}&city=${prefs.city}`;
 
   /** "Start over": default preferences (the current activity stays selected), no night, place or
@@ -580,11 +583,11 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
                 </label>
               ))}
             </div>
-            <CityPicker className="mt-6" tone="sand" value={prefs.city} onChange={changeCity} experience={prefs.experience} maxDriveHours={prefs.maxDriveHours} />
+            <CityPicker className="mt-5" tone="sand" value={prefs.city} onChange={changeCity} experience={prefs.experience} maxDriveHours={prefs.maxDriveHours} />
             {/* The main way forward comes first; the helper is optional. */}
-            <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               <button type="button" className="btn plan-go" onClick={() => goTo(2)}>{t.toNight}</button>
-              {data && pickForNight && <button type="button" className="btn-quiet" onClick={() => goTo(4)}>{t.takeBest}</button>}
+              {data && pickForNight && rating(pickForNight.score) !== "poor" && <button type="button" className="btn-quiet" onClick={() => goTo(4)}>{t.takeBest}</button>}
             </div>
             {helper}
           </fieldset>
