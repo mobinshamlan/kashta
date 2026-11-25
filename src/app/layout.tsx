@@ -21,12 +21,18 @@ const ruqaa = Aref_Ruqaa({
   display: "swap",
 });
 
+// Public address used for absolute share-image URLs.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://4kashta.vercel.app";
+
 export async function generateMetadata(): Promise<Metadata> {
   const { dict } = await getDict();
   return {
+    metadataBase: new URL(SITE_URL),
     title: { default: dict.meta.title, template: `%s · KASHTA كشتة` },
     description: dict.meta.description,
     icons: { icon: "/icon.svg" },
+    openGraph: { type: "website", siteName: "KASHTA كشتة", title: dict.meta.title, description: dict.meta.description, url: "/" },
+    twitter: { card: "summary_large_image", title: dict.meta.title, description: dict.meta.description },
   };
 }
 
