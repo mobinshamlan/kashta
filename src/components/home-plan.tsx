@@ -7,9 +7,8 @@ import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { buildChecklist } from "@/lib/checklist";
 import { estimateDrive, getDestination } from "@/lib/destinations";
 import { approxHours, formatNight } from "@/lib/i18n";
-import { DEFAULT_PREFS } from "@/lib/prefs-storage";
 import { rating } from "@/lib/score";
-import type { Experience } from "@/lib/types";
+import type { CityId, Experience } from "@/lib/types";
 import { useI18n } from "./locale-provider";
 import { RATING_COLOR } from "./ui";
 
@@ -20,7 +19,8 @@ const checklistKey = (slug: string, date: string) => `kashta:checklist:${slug}:$
  * The finished plan: what, when, where, why, how far and the permit, then a short list to tick.
  * Everything else (full checklist, hourly forecast, sources) is on the place page.
  */
-export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver, onChangePlace, onExplain, carry = "" }: {
+export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver, onChangePlace, onExplain, carry = "", city = "riyadh" }: {
+  city?: CityId;
   mode: Experience;
   row: ScoreRow;
   data: PlanResponse;
@@ -38,7 +38,7 @@ export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver,
   const d = getDestination(row.slug)!;
   const m = data.forecasts[row.slug]?.metrics.find((x) => x.date === row.date) ?? null;
   const rt = rating(row.score);
-  const drive = estimateDrive(d);
+  const drive = estimateDrive(d, city);
   const items = buildChecklist({ experience: mode, groupSize, metrics: m, permitStatus: d.permit.status });
   // Lead with what this activity and this night call for; the permit has its own row.
   const order = mode === "stars" ? ["stars", "weather", "camp", "vehicle"] : ["weather", "camp", "vehicle", "stars"];
@@ -94,7 +94,10 @@ export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver,
     url.searchParams.set("night", row.date);
     url.searchParams.set("place", row.slug);
     url.searchParams.set("step", "4");
-    if (groupSize !== DEFAULT_PREFS.groupSize) url.searchParams.set("group", String(groupSize));
+    // Always spell out city and group, even at their defaults, so the recipient's own saved
+    // preferences can't swap in a different start city or group size.
+    url.searchParams.set("city", city);
+    url.searchParams.set("group", String(groupSize));
     url.hash = "plan";
     const link = url.href;
     try {
@@ -127,11 +130,11 @@ export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver,
           </ul>
         </article>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button type="button" className="btn plan-go" onClick={copy}><Link2 aria-hidden size={17} />{dict.plan.shareLink}</button>
+          <button type="button" className="btn btn-accent" onClick={copy}><Link2 aria-hidden size={17} />{dict.plan.shareLink}</button>
           <button type="button" className="btn-quiet plan-explain" onClick={onExplain}><Sparkles aria-hidden size={16} />{dict.home.chat.explain}</button>
         </div>
         <p role="status" className="small mt-2 min-h-5 text-ink-2">
-          {share === "copied" ? dict.plan.shareCopied : share === "failed" ? dict.plan.shareInvalid : ""}
+          {share === "copied" ? dict.plan.shareCopied : share === "failed" ? dict.plan.shareCopyFailed : ""}
         </p>
         <div className="flex flex-wrap gap-x-5">
           <button type="button" className="link small inline-flex min-h-11 items-center" onClick={onChangePlace}>{t.changePlace}</button>

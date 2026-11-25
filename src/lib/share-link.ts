@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { getDestination } from "./destinations";
-import { FACTORS, type Factor, type PlanPrefs } from "./types";
+import { DRIVE_MAX_HOURS, DRIVE_MIN_HOURS, getDestination } from "./destinations";
+import { CITY_IDS, FACTORS, type Factor, type PlanPrefs } from "./types";
 
 export type SharedPlan = {
   slug: string;
@@ -29,9 +29,10 @@ const sharePayloadSchema = z.object({
   night: daySchema,
   experience: z.enum(["kashta", "stars"]),
   // Query values arrive as strings, the builder passes numbers; both must be plain decimals
-  // the planner's controls can show (1–40 people, 1–5 hours in half-hour steps).
+  // the planner's controls can show (1–40 people, 1.5–12 hours in half-hour steps).
+  city: z.enum(CITY_IDS),
   groupSize: z.preprocess(asText, z.string().regex(/^\d{1,2}$/).transform(Number).pipe(z.number().int().min(1).max(40))),
-  maxDriveHours: z.preprocess(asText, z.string().regex(/^\d(?:\.5)?$/).transform(Number).pipe(z.number().min(1).max(5))),
+  maxDriveHours: z.preprocess(asText, z.string().regex(/^\d{1,2}(?:\.5)?$/).transform(Number).pipe(z.number().min(DRIVE_MIN_HOURS).max(DRIVE_MAX_HOURS))),
   tempPref: z.enum(["cool", "mild", "warm"]),
   windTolerance: z.enum(["low", "medium", "high"]),
   priorities: factorListSchema,
@@ -51,6 +52,7 @@ export function parsePlanShareParams(params: ShareSearchParams):
   const parsed = sharePayloadSchema.safeParse({
     destination: get("destination"),
     night: get("night"),
+    city: get("city") ?? "riyadh",
     experience: get("experience"),
     groupSize: get("groupSize"),
     maxDriveHours: get("maxDriveHours"),
@@ -69,7 +71,7 @@ export function parsePlanShareParams(params: ShareSearchParams):
       slug: parsed.data.destination,
       night: parsed.data.night,
       prefs: {
-        city: "riyadh",
+        city: parsed.data.city,
         date: "flexible",
         experience: parsed.data.experience,
         groupSize: parsed.data.groupSize,
@@ -88,6 +90,7 @@ export function buildPlanShareUrl(origin: string, slug: string, night: string, p
   const parsed = sharePayloadSchema.safeParse({
     destination: slug,
     night,
+    city: prefs.city,
     experience: prefs.experience,
     groupSize: prefs.groupSize,
     maxDriveHours: prefs.maxDriveHours,
@@ -103,6 +106,7 @@ export function buildPlanShareUrl(origin: string, slug: string, night: string, p
     url.searchParams.set("share", "1");
     url.searchParams.set("destination", parsed.data.destination);
     url.searchParams.set("night", parsed.data.night);
+    url.searchParams.set("city", parsed.data.city);
     url.searchParams.set("experience", parsed.data.experience);
     url.searchParams.set("groupSize", String(parsed.data.groupSize));
     url.searchParams.set("maxDriveHours", String(parsed.data.maxDriveHours));

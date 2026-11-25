@@ -8,7 +8,7 @@ import { estimateDrive, getDestination } from "@/lib/destinations";
 import { approxHours, formatNight } from "@/lib/i18n";
 import { nightReasons } from "@/lib/reasons";
 import { rating } from "@/lib/score";
-import type { Experience } from "@/lib/types";
+import type { CityId, Experience } from "@/lib/types";
 import { useI18n } from "./locale-provider";
 import { PlacesMap } from "./places-map";
 import { ReasonList } from "./recommendation-card";
@@ -21,7 +21,8 @@ const SHORT = 4;
  * answer above (rankNight). The map and the list share one selected place; its essentials sit in
  * a compact panel on the map, with one action that carries it into the plan.
  */
-export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onPlan, carry = "" }: {
+export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onPlan, carry = "", city = "riyadh" }: {
+  city?: CityId;
   mode: Experience;
   data: PlanResponse;
   night: string;
@@ -48,7 +49,7 @@ export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onPl
     onSelect(slug);
     if (ranked.findIndex((r) => r.slug === slug) >= SHORT) setAll(true);
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // Only scroll on phones, where the row sits below the map; keep keyboard focus on the map.
+    // Only scroll on phones, where the map sits below the list; keep keyboard focus on the map.
     if (window.matchMedia("(max-width: 1023px)").matches)
       requestAnimationFrame(() => document.getElementById("place-panel")?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" }));
   };
@@ -61,7 +62,7 @@ export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onPl
         <div className="home-places-map min-w-0">
           <PlacesMap
             key={`${mode}-${night}`}
-            fit
+            city={city}
             mode={mode}
             scores={Object.fromEntries(ranked.map((r) => [r.slug, r.score]))}
             numbered={rows.map((r) => r.slug)}
@@ -93,7 +94,7 @@ export function HomePlaces({ mode, data, night, ranked, selected, onSelect, onPl
                   <div className="place-panel" id="place-panel">
                         <ReasonList className="small" reasons={nightReasons(row, data.metrics[`${row.slug}|${row.date}`], 1)} />
                         <p className="place-panel-facts small mt-2">
-                          <span><Car aria-hidden size={15} /><bdi className="num">{approxHours(estimateDrive(d).hours, locale)}</bdi></span>
+                          <span><Car aria-hidden size={15} /><bdi className="num">{approxHours(estimateDrive(d, city).hours, locale)}</bdi></span>
                           <span><PermitIcon aria-hidden size={15} />{dict.permit.short[d.permit.status]}</span>
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">

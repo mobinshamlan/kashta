@@ -1,4 +1,5 @@
 import type { InterpretedPrefs } from "./schemas";
+import type { CityId } from "./types";
 
 export type UnsupportedInterpretation = "moon_viewing";
 
@@ -45,6 +46,32 @@ const AVOID_WIND = /(?:ما\s*نبي|مانبي|ما\s*(?:أبي|ابي)|ماب�
 const LOW_WIND = /(?:هوا|هواء|رياح|wind)\s+(?:خفيف|قليل|هادئ|low|little)|\blow\s+wind\b/iu;
 const AVOID_DUST = /(?:ما\s*نبي|مانبي|ما\s*(?:أبي|ابي)|مابغى|ما\s*ابغى|لا\s*(?:نبي|أبي|ابي)|no|avoid)\s*(?:(?:هوا|هواء|رياح|wind)\s*(?:و|and)\s*)?(?:غبار|تراب|dust)/iu;
 
+/** Starting cities by the names people write; the first one named wins. */
+const CITY_NAMES: [CityId, RegExp][] = [
+  ["riyadh", /(?:الرياض|الرياظ|riyadh)/iu],
+  ["jeddah", /(?:جدة|جده|jeddah|jidda)/iu],
+  ["makkah", /(?:مكة|مكه|makkah|mecca)/iu],
+  ["madinah", /(?:المدينة|المدينه|madinah|medina)/iu],
+  ["dammam", /(?:الدمام|الخبر|الشرقية|الشرقيه|dammam|khobar)/iu],
+  ["buraydah", /(?:بريدة|بريده|القصيم|buraydah|buraidah|qassim)/iu],
+  ["abha", /(?:أبها|ابها|خميس مشيط|abha)/iu],
+];
+const FROM_PHRASE = /(?:من|طالع(?:ين)?\s+من|ساكن(?:ين)?\s+(?:في|ب)|في|from|in|based in|leaving)\s*$/iu;
+
+/** The start city, only when the text says where they set out from ("من جدة", "from Dammam"). */
+export function extractCity(text: string): CityId | null {
+  const normalized = normalizeText(text);
+  let best: { id: CityId; at: number } | null = null;
+  for (const [id, re] of CITY_NAMES) {
+    const m = re.exec(normalized);
+    if (!m) continue;
+    // A city counts only when it follows "من/في/from/in", so a passing mention is not read as the start.
+    if (!FROM_PHRASE.test(normalized.slice(0, m.index).trimEnd() + " ")) continue;
+    if (!best || m.index < best.at) best = { id, at: m.index };
+  }
+  return best?.id ?? null;
+}
+
 function normalizeText(value: string) {
   return value.normalize("NFKC").replace(/[\u064B-\u065F\u0670]/gu, "").replace(/\s+/gu, " ").trim();
 }
@@ -76,6 +103,8 @@ export function applyInterpretationGuards(
   if (!TEMPERATURE_MENTION.test(normalizedText)) next.tempPref = null;
   if (!WIND_MENTION.test(normalizedText)) next.windTolerance = null;
   if (!DRIVE_MENTION.test(normalizedText)) next.maxDriveHours = null;
+  // The start city comes only from the user's words, never from Llama's guess.
+  next.city = extractCity(text);
   if (AVOID_WIND.test(normalizedText) || LOW_WIND.test(normalizedText)) next.windTolerance = "low";
 
   const mentionedFactors = new Set<string>();

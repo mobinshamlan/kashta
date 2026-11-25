@@ -1,10 +1,10 @@
 "use client";
 
 import { ChevronDown, LoaderCircle, MessageCircle, Send, Sparkles, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
-import { getDestination } from "@/lib/destinations";
+import { DRIVE_MAX_HOURS, DRIVE_MIN_HOURS, getDestination } from "@/lib/destinations";
 import { formatNight } from "@/lib/i18n";
 import { nightReasons, type NightPick } from "@/lib/reasons";
 import type { Explanation, InterpretedPrefs } from "@/lib/schemas";
@@ -15,6 +15,14 @@ import { useAiStatus } from "./explain-panel";
 import { useI18n } from "./locale-provider";
 import { ReasonList } from "./recommendation-card";
 import { ErrorState } from "./ui";
+
+/** Below this width the chat is a sheet over the page rather than a column beside it. */
+const NARROW = "(max-width: 1199px)";
+const subscribeNarrow = (cb: () => void) => {
+  const mq = window.matchMedia(NARROW);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
 
 type ExplainData = { explanation: Omit<Explanation, "summary"> & { summary: string | null }; droppedForUngroundedNumbers: number };
 type Msg =
@@ -93,7 +101,6 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     if (msg.length < 4 || busy) return;
     push({ from: "user", text: msg });
     setText("");
-    setShowExamples(false);
     setBusy("interpret");
     // The plan on screen goes along, so a question is answered from it (the server recomputes the numbers).
     const context = chosen ? { slug: chosen.slug, date: chosen.date, prefs: { ...prefs, date: chosen.date } } : null;
@@ -130,9 +137,13 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
       changed.push(`${dict.home.forPeople}: ${got.groupSize}`);
     }
     const tune: Partial<Tune> = {};
+    if (got.city && got.city !== prefs.city) {
+      tune.city = got.city;
+      changed.push(`${dict.plan.cityLegend} ${dict.common.cities[got.city]}`);
+    }
     if (got.maxDriveHours) {
-      // The same range the planner offers (1.5–5 h, half-hour steps).
-      tune.maxDriveHours = Math.min(5, Math.max(1.5, Math.round(got.maxDriveHours * 2) / 2));
+      // The same range the planner offers (1.5–12 h, half-hour steps).
+      tune.maxDriveHours = Math.min(DRIVE_MAX_HOURS, Math.max(DRIVE_MIN_HOURS, Math.round(got.maxDriveHours * 2) / 2));
       if (tune.maxDriveHours !== got.maxDriveHours) notes.push(t.driveClamped(dict.plan.driveValue(tune.maxDriveHours)));
       changed.push(`${dict.plan.driveLabel}: ${dict.plan.driveValue(tune.maxDriveHours)}`);
     }
@@ -155,7 +166,7 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     if (!changed.length) return push({ from: "bot", kind: "text", text: t.nothingChanged, notes });
     push({ from: "bot", kind: "set", changed, notes });
     // Wait for the app to re-rank with the new settings, then quote its pick.
-    const key = tuneKey(c.experience ?? mode, { maxDriveHours: prefs.maxDriveHours, tempPref: prefs.tempPref, windTolerance: prefs.windTolerance, priorities: prefs.priorities, ...c.tune });
+    const key = tuneKey(c.experience ?? mode, { city: prefs.city, maxDriveHours: prefs.maxDriveHours, tempPref: prefs.tempPref, windTolerance: prefs.windTolerance, priorities: prefs.priorities, ...c.tune });
     waiting.current = { key };
     onApply(c);
     setApplied((n) => n + 1);
@@ -193,13 +204,53 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [explainSignal]);
 
+  // Phones open the chat as a sheet: move focus into it, let Escape close it, and hand focus back
+  // to whatever opened it. On desktops the panel is always shown, so none of this applies.
+  const opener = useRef<HTMLElement | null>(null);
+  const dockRef = useRef<HTMLButtonElement>(null);
+  // True while the chat covers the page as a sheet (phones): it is then a modal dialog.
+  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
+  const sheet = open && narrow;
+  useEffect(() => {
+    if (!open || !window.matchMedia(NARROW).matches) return;
+    if (!opener.current) opener.current = document.activeElement as HTMLElement | null;
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })));
+    // Everything outside the sheet goes inert (no clicks, taps or focus) until it closes.
+    const inerted: HTMLElement[] = [];
+    for (let el: HTMLElement | null = document.getElementById(`${id}-panel`); el && el !== document.body; el = el.parentElement) {
+      for (const sib of el.parentElement?.children ?? []) {
+        if (sib !== el && sib instanceof HTMLElement && !sib.inert) { sib.inert = true; inerted.push(sib); }
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return setOpen(false);
+      if (e.key !== "Tab") return;
+      // Keep Tab inside the sheet while it covers the page.
+      const panel = document.getElementById(`${id}-panel`);
+      const items = panel ? [...panel.querySelectorAll<HTMLElement>("button:not([disabled]), textarea, a[href], [tabindex='0']")] : [];
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      else if (!panel!.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); inerted.forEach((el) => { el.inert = false; }); };
+  }, [open, id]);
+  useEffect(() => {
+    if (open || !opener.current) return;
+    const back = opener.current.isConnected && opener.current.offsetParent !== null ? opener.current : dockRef.current;
+    opener.current = null;
+    back?.focus({ preventScroll: true });
+  }, [open]);
+
   const disabled = ai !== true || busy !== null;
   const last = [...msgs].reverse().find((m) => m.from === "bot");
 
   return (
     <aside className="trip-chat" data-open={open} data-mode={mode} aria-labelledby={`${id}-title`}>
       {/* Phones: a docked bar that opens the conversation; desktops always show it. */}
-      <button type="button" className="trip-chat-dock" aria-expanded={open} aria-controls={`${id}-panel`} onClick={() => { setOpen(true); requestAnimationFrame(() => inputRef.current?.focus()); }}>
+      <button ref={dockRef} type="button" className="trip-chat-dock" aria-expanded={open} aria-controls={`${id}-panel`} onClick={() => setOpen(true)}>
         <span className="trip-chat-mark" aria-hidden><Sparkles size={16} /></span>
         <span className="min-w-0 flex-1 text-start">
           <span className="block font-semibold">{t.title}</span>
@@ -208,7 +259,7 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
         <MessageCircle aria-hidden size={20} />
       </button>
 
-      <div id={`${id}-panel`} className="trip-chat-panel">
+      <div id={`${id}-panel`} className="trip-chat-panel" {...(sheet ? { role: "dialog", "aria-modal": true, "aria-labelledby": `${id}-title` } : {})}>
         <header className="trip-chat-head">
           <span className="trip-chat-mark" aria-hidden><Sparkles size={16} /></span>
           <div className="min-w-0 flex-1">

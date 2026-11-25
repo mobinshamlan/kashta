@@ -7,7 +7,7 @@ import type { NightSummary, ScoreRow } from "@/lib/api-types";
 import { estimateDrive, getDestination } from "@/lib/destinations";
 import { approxHours, formatNight } from "@/lib/i18n";
 import { nightReasons, type Reason } from "@/lib/reasons";
-import type { Experience, Factor, HourPoint } from "@/lib/types";
+import type { CityId, Experience, Factor, HourPoint } from "@/lib/types";
 import { NightWindow } from "./night-window";
 import { useI18n } from "./locale-provider";
 import { RATING_COLOR } from "./ui";
@@ -57,7 +57,10 @@ export function RecommendationCard({
   compact = false,
   facts = true,
   details,
+  city = "riyadh",
 }: {
+  /** Where the drive is measured from. */
+  city?: CityId;
   row: ScoreRow;
   metrics: NightSummary | undefined;
   experience: Experience;
@@ -78,7 +81,7 @@ export function RecommendationCard({
   const detailsId = useId();
   const d = getDestination(row.slug);
   if (!d) return null;
-  const drive = estimateDrive(d);
+  const drive = estimateDrive(d, city);
   const reasons = nightReasons(row, metrics, compact ? 1 : hours ? 2 : 3);
   const H = headingLevel === 2 ? "h2" : "h3";
   const permitOk = d.permit.status === "permit_required" || d.permit.status === "verified_permitted";
@@ -94,7 +97,7 @@ export function RecommendationCard({
       <div className="mt-3 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <H id={`rec-${row.slug}-${row.date}`} className="rec-place">{d.name[locale]}</H>
-          <p className="small muted mt-1">{d.governorate[locale]}</p>
+          <p className="small muted mt-1">{d.governorate[locale]}{locale === "ar" ? "، " : ", "}{d.region[locale]}</p>
         </div>
         {/* A plain-language label leads; the number lives in the score breakdown. */}
         <span className="rec-rating" style={{ ["--rating" as string]: RATING_COLOR[rating(row.score)] }}>{dict.rating[rating(row.score)]}</span>
@@ -149,7 +152,7 @@ export function RecommendationCard({
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         {actions ?? (
-          <Link href={`/destinations/${d.slug}?night=${row.date}&exp=${experience}`} className="btn btn-accent">
+          <Link href={`/destinations/${d.slug}?night=${row.date}&exp=${experience}&city=${city}`} className="btn btn-accent">
             {dict.common.viewDestination}
           </Link>
         )}

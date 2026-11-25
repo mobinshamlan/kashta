@@ -2,6 +2,8 @@ export type Locale = "ar" | "en";
 export type Localized = { ar: string; en: string };
 
 export type Experience = "kashta" | "stars";
+export type CityId = "riyadh" | "jeddah" | "makkah" | "madinah" | "dammam" | "buraydah" | "abha";
+export const CITY_IDS = ["riyadh", "jeddah", "makkah", "madinah", "dammam", "buraydah", "abha"] as const satisfies readonly CityId[];
 export type TempPref = "cool" | "mild" | "warm";
 export type WindTolerance = "low" | "medium" | "high";
 export type Factor = "temp" | "wind" | "rain" | "dust" | "clouds" | "moon";
@@ -30,6 +32,8 @@ export interface Destination {
   slug: string;
   name: Localized;
   governorate: Localized;
+  /** The administrative region, as the NCVC guide groups its sites. */
+  region: Localized;
   lat: number;
   lon: number;
   terrain: Terrain;
@@ -59,7 +63,8 @@ export type PhotoKey =
 
 export interface PlanPrefs {
   experience: Experience;
-  city: "riyadh";
+  /** Where the trip starts; drive times are estimated from here. */
+  city: CityId;
   date: "flexible" | string;
   groupSize: number;
   maxDriveHours: number;

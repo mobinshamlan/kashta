@@ -1,4 +1,4 @@
-import { collectNumbers, extractJson, hasInternalKey, isGrounded } from "@/lib/ai-guards";
+import { collectNumbers, extractJson, hasInternalKey, isGrounded, normaliseDigits } from "@/lib/ai-guards";
 import { apiError, fromException, privateJson, rateLimited, readJson } from "@/lib/http";
 import { chatLlama, llamaConfig } from "@/lib/llm";
 import { upcomingNights } from "@/lib/nights";
@@ -29,10 +29,11 @@ Never infer a preference from the planner's defaults or from the user's activity
 
 Fields:
 - "experience": "kashta" (camping, fire, gathering) or "stars" (stargazing, نجوم, درب التبانة).
+- "city": where they set out from, only when they say so: "riyadh" | "jeddah" | "makkah" | "madinah" | "dammam" | "buraydah" | "abha" ("طالعين من جدة" = "jeddah").
 - "groupSize": integer number of people (e.g. "حنا خمسة" = 5).
 - "tempPref": "cool" | "mild" | "warm" — the evening temperature they want.
 - "windTolerance": "low" (they hate wind / wind matters a lot) | "medium" | "high" (wind does not bother them).
-- "maxDriveHours": number, maximum one-way driving hours (0.5–6).
+- "maxDriveHours": number, maximum one-way driving hours (1.5–12). "Closer", "one hour max", "أقرب" and similar are plan changes, not questions: set it to the number they said (the app keeps it within 1.5–12).
 - "date": "flexible" for "هالأسبوع", "هالاسبوع", "هذا الأسبوع", "this week" or any night in the coming week; otherwise one date from the calendar below when they name a specific day ("الخميس", "tonight", "بكرة"). Do not mark a recognized week phrase unclear.
   Nights are dated by the evening they start. In Saudi Arabic «ليلة <day>» means the night BEFORE that day: «ليلة الجمعة» = the Thursday evening date, «ليلة السبت» = the Friday evening date. A bare day name («يوم الخميس», «الخميس») or English "Friday night" means that day's own evening.
 - "priorities": up to 3 of "temp","wind","rain","dust","clouds","moon" that they said matter most.
@@ -42,7 +43,7 @@ Fields:
 - "question": true when the user asks about KASHTA rather than asking to change the plan.
 - "redirect": a short same-language response only for unrelated requests or serious safety concerns. Leave it out for anything about KASHTA.
 
-Calendar of the next seven nights (Riyadh time):
+Calendar of the next seven nights (Saudi time):
 ${calendar}
 
 Never invent weather, places, permits or numbers. Never add fields that are not listed.`;
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
 
     let raw: unknown;
     try {
-      raw = extractJson(reply.content);
+      raw = extractJson(normaliseDigits(reply.content));
     } catch {
       return apiError("ai_invalid_output", "Llama did not return JSON");
     }
@@ -118,11 +119,19 @@ const inLanguage = (x: string, locale: Locale) => (locale === "ar" ? /[\u0600-\u
  * reply quotes a number the facts don't contain or drifts language; the chat then shows the
  * app's own reasons instead. Answering never changes preferences.
  */
+/** Things the app has no data on; answered plainly instead of letting the model guess. */
+const NO_DATA = /(?:أطفال|اطفال|عيال|دورات?\s*مياه|دورة\s*مياه|حمام|حمامات|خدمات|مرافق|kids?|child(?:ren)?|toilets?|restrooms?|bathrooms?|facilit(?:y|ies)|services)/iu;
+const NO_DATA_REPLY: Record<Locale, string> = {
+  ar: "ما عندنا معلومات عن المرافق أو مناسبة المكان للأطفال. شوف صفحة المكان أو دليل التخييم الرسمي.",
+  en: "KASHTA has no information on facilities or suitability for children. Check the place page or the official camping guide.",
+};
+
 async function answer(text: string, locale: Locale, context: { slug: string; date: string; prefs: PlanPrefs } | null): Promise<string | null> {
+  if (NO_DATA.test(text)) return NO_DATA_REPLY[locale];
   const plan = context ? await scorePlan(context.slug, context.date, context.prefs) : null;
   const facts = (plan && context ? answerFacts(plan, context.prefs, locale) : null) ?? { selectedPlace: null, note: context ? "The selected night is no longer in the seven-day forecast; ask them to pick a new night." : "The user has not picked a place and night yet." };
   const language = locale === "ar" ? "Arabic (natural Saudi tone, not heavy slang; units as °م، كم/س، ٪)" : "English";
-  const system = `You are KASHTA's trip assistant. KASHTA recommends an upcoming night and a verified place near Riyadh for a kashta (desert camping) or stargazing, from the forecast.
+  const system = `You are KASHTA's trip assistant. KASHTA recommends an upcoming night and a verified place in Saudi Arabia for a kashta (desert camping) or stargazing, from the forecast.
 Answer the user's question in ${language}, in at most three short sentences. Use ONLY the facts JSON below for anything about the selected place, night, forecast, drive, permit, ranking or packing.
 - "Why this place": in two short sentences, use whyThisPlace only: describe each mainReasons condition with its measured value and unit (evening/coldest °C, gust km/h, rain chance %, cloud %, dust µg/m³, moon-free dark hours), then, only if rankedFirstWithinDriveLimitThatNight is true, say it ranked first within the drive limit that night; otherwise say that scoredHigherThatNight fit better that night. Present "helped" conditions as reasons and a "held it back" condition as a caution, never as a plus. Do not use otherForecastDetails for this. It is a forecast: say "expected".
 - otherForecastDetails: use only when the user asks about a specific value.
@@ -131,6 +140,9 @@ Answer the user's question in ${language}, in at most three short sentences. Use
 - Drive: it is a rough estimate. Permit: repeat the permit facts only; never claim legality beyond them.
 - General kashta or stargazing questions in Saudi Arabia: brief, practical, no numbers, places or permit claims that are not in the facts.
 - If selectedPlace is null and the question is about the plan, ask them to pick a place and night first.
+- Temperatures: "evening" is early in the night and "coldest" is the lowest feels-like temperature before dawn. Never call the evening value the lowest.
+- Anything the facts don't cover (facilities, toilets, services, crowds, suitability for children): say, in ${language}, that KASHTA has no information on it and suggest the place page or the official guide. Never guess.
+- Write every number with Western digits (0-9), also in Arabic.
 - Quote measurements with their units exactly as given. Never quote scores. Never invent weather, places, permits, reasons or measurements. Never write JSON field names.
 - Do not offer to change settings; this is only an answer.
 Reply with ONE JSON object and nothing else: {"answer": string}
@@ -147,7 +159,7 @@ ${JSON.stringify(facts)}`;
   );
   let raw: unknown;
   try {
-    raw = extractJson(reply.content);
+    raw = extractJson(normaliseDigits(reply.content));
   } catch {
     return null;
   }
