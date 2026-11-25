@@ -107,8 +107,8 @@ export default async function AboutPage() {
             </ul>
             <p className="small mt-4 text-ink-2">
               {ar
-                ? "لكل مكان ولسبع ليالٍ: الطقس من Open-Meteo، والغبار من CAMS، والقمر بحساب فلكي."
-                : "For every place and seven nights: weather from Open-Meteo, dust from CAMS, and the moon calculated astronomically."}
+                ? "لكل مكان ولسبع ليالٍ: الطقس من Open-Meteo، والغبار من CAMS (توقعه أقصر، فآخر الليالي قد تبقى بدون تقييم)، والقمر بحساب فلكي."
+                : "For every place and seven nights: weather from Open-Meteo, dust from CAMS (a shorter forecast, so the last nights may stay unrated), and the moon calculated astronomically."}
             </p>
           </li>
 
