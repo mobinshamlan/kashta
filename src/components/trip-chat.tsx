@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, LoaderCircle, MessageCircle, Send, Sparkles, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import type { PlanResponse, ScoreRow } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { DRIVE_MAX_HOURS, DRIVE_MIN_HOURS, getDestination } from "@/lib/destinations";
@@ -15,6 +15,14 @@ import { useAiStatus } from "./explain-panel";
 import { useI18n } from "./locale-provider";
 import { ReasonList } from "./recommendation-card";
 import { ErrorState } from "./ui";
+
+/** Below this width the chat is a sheet over the page rather than a column beside it. */
+const NARROW = "(max-width: 1199px)";
+const subscribeNarrow = (cb: () => void) => {
+  const mq = window.matchMedia(NARROW);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
 
 type ExplainData = { explanation: Omit<Explanation, "summary"> & { summary: string | null }; droppedForUngroundedNumbers: number };
 type Msg =
@@ -200,8 +208,11 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
   // to whatever opened it. On desktops the panel is always shown, so none of this applies.
   const opener = useRef<HTMLElement | null>(null);
   const dockRef = useRef<HTMLButtonElement>(null);
+  // True while the chat covers the page as a sheet (phones): it is then a modal dialog.
+  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
+  const sheet = open && narrow;
   useEffect(() => {
-    if (!open || !window.matchMedia("(max-width: 1199px)").matches) return;
+    if (!open || !window.matchMedia(NARROW).matches) return;
     if (!opener.current) opener.current = document.activeElement as HTMLElement | null;
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })));
     const onKey = (e: KeyboardEvent) => {
@@ -241,7 +252,7 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
         <MessageCircle aria-hidden size={20} />
       </button>
 
-      <div id={`${id}-panel`} className="trip-chat-panel">
+      <div id={`${id}-panel`} className="trip-chat-panel" {...(sheet ? { role: "dialog", "aria-modal": true, "aria-labelledby": `${id}-title` } : {})}>
         <header className="trip-chat-head">
           <span className="trip-chat-mark" aria-hidden><Sparkles size={16} /></span>
           <div className="min-w-0 flex-1">
