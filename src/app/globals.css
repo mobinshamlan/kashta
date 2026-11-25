@@ -1393,6 +1393,8 @@
   .home-v4-places .frame { position: relative; padding-top: clamp(3rem, 6vw, 4.5rem); }
 
   .home-places-grid { display: grid; gap: 1.25rem; }
+  /* Phones: the list (and its "Use this place") comes first, the map follows as context. */
+  @media (max-width: 1023px) { .home-places-list { order: -1; } }
   @media (min-width: 1024px) {
     .home-places-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 2.25rem; align-items: start; }
     .home-places-map { position: sticky; top: 9.5rem; }

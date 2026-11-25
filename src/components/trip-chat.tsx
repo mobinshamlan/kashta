@@ -197,13 +197,32 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [explainSignal]);
 
+  // Phones open the chat as a sheet: move focus into it, let Escape close it, and hand focus back
+  // to whatever opened it. On desktops the panel is always shown, so none of this applies.
+  const opener = useRef<HTMLElement | null>(null);
+  const dockRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open || !window.matchMedia("(max-width: 1199px)").matches) return;
+    if (!opener.current) opener.current = document.activeElement as HTMLElement | null;
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); };
+  }, [open]);
+  useEffect(() => {
+    if (open || !opener.current) return;
+    const back = opener.current.isConnected && opener.current.offsetParent !== null ? opener.current : dockRef.current;
+    opener.current = null;
+    back?.focus({ preventScroll: true });
+  }, [open]);
+
   const disabled = ai !== true || busy !== null;
   const last = [...msgs].reverse().find((m) => m.from === "bot");
 
   return (
     <aside className="trip-chat" data-open={open} data-mode={mode} aria-labelledby={`${id}-title`}>
       {/* Phones: a docked bar that opens the conversation; desktops always show it. */}
-      <button type="button" className="trip-chat-dock" aria-expanded={open} aria-controls={`${id}-panel`} onClick={() => { setOpen(true); requestAnimationFrame(() => inputRef.current?.focus()); }}>
+      <button ref={dockRef} type="button" className="trip-chat-dock" aria-expanded={open} aria-controls={`${id}-panel`} onClick={() => setOpen(true)}>
         <span className="trip-chat-mark" aria-hidden><Sparkles size={16} /></span>
         <span className="min-w-0 flex-1 text-start">
           <span className="block font-semibold">{t.title}</span>
