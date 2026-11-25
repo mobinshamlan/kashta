@@ -130,11 +130,11 @@ export function HomePlan({ mode, row, data, groupSize, onGroupSize, onStartOver,
           </ul>
         </article>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button type="button" className="btn plan-go" onClick={copy}><Link2 aria-hidden size={17} />{dict.plan.shareLink}</button>
+          <button type="button" className="btn btn-accent" onClick={copy}><Link2 aria-hidden size={17} />{dict.plan.shareLink}</button>
           <button type="button" className="btn-quiet plan-explain" onClick={onExplain}><Sparkles aria-hidden size={16} />{dict.home.chat.explain}</button>
         </div>
         <p role="status" className="small mt-2 min-h-5 text-ink-2">
-          {share === "copied" ? dict.plan.shareCopied : share === "failed" ? dict.plan.shareInvalid : ""}
+          {share === "copied" ? dict.plan.shareCopied : share === "failed" ? dict.plan.shareCopyFailed : ""}
         </p>
         <div className="flex flex-wrap gap-x-5">
           <button type="button" className="link small inline-flex min-h-11 items-center" onClick={onChangePlace}>{t.changePlace}</button>
