@@ -275,7 +275,7 @@ export function PlacesMap({
                 aria-pressed={isSel}
                 aria-label={`${n}. ${d.name[locale]} — ${score === null ? dict.rating.unknown : dict.rating[rt]}`}
                 onKeyDown={(e) => onPinKey(e, d.slug)}
-                onFocus={() => onHover(d.slug)}
+                onFocus={(e) => { onHover(d.slug); e.currentTarget.scrollIntoView({ block: "center", inline: "nearest" }); }}
                 onBlur={() => onHover(null)}
                 onClick={() => onSelect(d.slug)}
                 onMouseEnter={() => onHover(d.slug)}
