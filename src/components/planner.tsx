@@ -300,7 +300,14 @@ export function Planner({ initialText = "", initialExperience, initialShare, ini
     if (!data) return;
     // An opened share link stays in the address until the visitor changes a setting, so a reload
     // shows the sender's trip and not the visitor's own saved preferences.
-    if (initialShare && samePlanPrefs({ ...initialShare.prefs, date: "flexible" }, prefs)) return;
+    if (initialShare && samePlanPrefs({ ...initialShare.prefs, date: "flexible" }, prefs) && (!chosenRow || (chosenRow.slug === initialShare.slug && chosenRow.date === initialShare.night))) return;
+    // Edited after opening a share: the address becomes a share link for the edited trip, so a
+    // reload keeps the edits instead of falling back to the visitor's saved preferences.
+    if (initialShare && chosenRow) {
+      const link = buildPlanShareUrl(window.location.origin, chosenRow.slug, chosenRow.date, prefs);
+      if (link && link !== window.location.href) window.history.replaceState(window.history.state, "", link);
+      if (link) return;
+    }
     const url = new URL(window.location.href);
     ["share", "q", "destination", "night", "place", "exp"].forEach((k) => url.searchParams.delete(k));
     [...url.searchParams.keys()].filter((k) => k !== "exp").forEach((k) => url.searchParams.delete(k));
