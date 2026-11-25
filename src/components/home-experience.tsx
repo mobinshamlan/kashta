@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlanResponse } from "@/lib/api-types";
 import { callApi, type ClientErrorCode } from "@/lib/client-api";
 import { getDestination } from "@/lib/destinations";
+import { rating } from "@/lib/score";
+import Link from "next/link";
 import { formatNight } from "@/lib/i18n";
 import { DEFAULT_PREFS, loadPrefs, savePrefs } from "@/lib/prefs-storage";
 import { bestPerNight, rankNight } from "@/lib/reasons";
@@ -333,7 +335,7 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
                   row={chosen}
                   metrics={data.metrics[`${chosen.slug}|${chosen.date}`]}
                   experience={mode}
-                  kicker={night === bestNight && chosen.slug === ranked[0]?.slug ? t.best : t.nightPick}
+                  kicker={night === bestNight && chosen.slug === ranked[0]?.slug ? (rating(chosen.score) === "poor" ? t.noGood : t.best) : t.nightPick}
                   actions={
                     <button type="button" className="btn btn-accent" onClick={() => advance(3)}>
                       {t.toPlaces}
@@ -346,6 +348,10 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
                 <div className="rec-card on-night" data-mode={mode} role="status">
                   <p className="lead">{t.noneTitle}</p>
                   <p className="muted mt-2">{t.noneBody}</p>
+                  <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <button type="button" className="btn btn-accent" onClick={() => load(mode, tune, true)}>{dict.common.retry}</button>
+                    <Link href={`/plan?exp=${mode}`} className="rec-link small inline-flex min-h-11 items-center">{t.openPlanner}</Link>
+                  </div>
                 </div>
               )}
             </div>
@@ -373,10 +379,18 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
               <div className="mt-3">
                 {data ? (
                   <SevenNights compact nights={nights} metricsFor={(n) => { const r = nights.find((x) => x.night === n)?.best; return r ? data.metrics[`${r.slug}|${n}`] : undefined; }} selected={night} bestNight={bestNight} onSelect={chooseNight} />
-                ) : (
+                ) : state.s === "loading" && (
                   <div className="seven seven--compact" aria-hidden>{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
                 )}
               </div>
+              {/* A night picked here re-ranks the card above, which may be off screen on phones: name its pick here too. */}
+              {data && picked && night === picked && chosen && chosenDest && (
+                <p className="week-pick small mt-3 flex flex-wrap items-center gap-x-3 gap-y-1" aria-live="polite">
+                  <span className="text-star-2">{formatNight(night, locale)}:</span>
+                  <strong className="font-semibold">{chosenDest.name[locale]}</strong>
+                  <button type="button" className="rec-link inline-flex min-h-11 items-center gap-1" onClick={() => advance(3)}>{t.toPlaces}<Forward aria-hidden size={16} /></button>
+                </p>
+              )}
               {data && <WeekLegend className="muted mt-3" nights={nights} mode={mode} />}
             </div>
           </div>
