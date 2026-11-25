@@ -151,9 +151,19 @@ export function HomeExperience({ initialMode }: { initialMode?: Experience }) {
   // Back steps back through the plan; everything else replaces the current entry.
   const push = useRef(false);
   useEffect(() => {
-    if (!data) return;
     const url = new URL(window.location.href);
     const set = (k: string, v: string | null) => (v ? url.searchParams.set(k, v) : url.searchParams.delete(k));
+    if (!data) {
+      // While the new forecast loads, the address already shows the chosen activity and city;
+      // nothing is removed, so a shared plan arriving on first load stays intact.
+      url.searchParams.set("mode", mode);
+      if (tune.city !== DEFAULT_TUNE.city) url.searchParams.set("city", tune.city);
+      if (url.href === window.location.href) return;
+      // A decision (new activity or city) gets its own history entry now, so Back still works.
+      if (push.current) { push.current = false; window.history.pushState(null, "", url); }
+      else window.history.replaceState(window.history.state, "", url);
+      return;
+    }
     set("mode", mode);
     // A used plan pins its night and place, so a bookmark or reload can't drift with the forecast.
     const used = reached === 4 && !!chosen;
