@@ -803,10 +803,12 @@
 
 @layer components {
   .seven-weekday { display: block; }
+  .seven-weekday-short { display: none; }
   /* Narrow phones: weekday names don't fit seven columns; the date number does. */
   @media (max-width: 440px) {
     /* Keep the row so bars line up with "tonight", but hide names that don't fit. */
-    .seven--compact li:not(:first-child) .seven-weekday { visibility: hidden; width: 0; height: 1.25em; overflow: hidden; }
+    .seven--compact li:not(:first-child) .seven-weekday { display: none; }
+    .seven--compact .seven-weekday-short { display: block; font-size: 0.72rem; }
     .seven--compact .seven-day { font-size: 0.82rem; }
   }
 }
@@ -1628,6 +1630,8 @@
   /* Wide screens: a persistent column, sticky under the header, as tall as the screen allows. */
   @media (min-width: 1200px) {
     .trip-chat { position: sticky; top: 4.5rem; align-self: start; height: calc(100svh - 4.5rem); border-inline-start: 1px solid rgb(255 255 255 / 8%); }
+    /* Room below the plan, so scrolling it to the top doesn't push the sticky chat under the header. */
+    .home-v4-plan { min-height: calc(100svh - 4.5rem); }
     .trip-chat-panel { height: 100%; }
     .trip-chat-dock, .trip-chat-close { display: none; }
   }
