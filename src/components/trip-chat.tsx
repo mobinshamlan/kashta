@@ -215,6 +215,13 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     if (!open || !window.matchMedia(NARROW).matches) return;
     if (!opener.current) opener.current = document.activeElement as HTMLElement | null;
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })));
+    // Everything outside the sheet goes inert (no clicks, taps or focus) until it closes.
+    const inerted: HTMLElement[] = [];
+    for (let el: HTMLElement | null = document.getElementById(`${id}-panel`); el && el !== document.body; el = el.parentElement) {
+      for (const sib of el.parentElement?.children ?? []) {
+        if (sib !== el && sib instanceof HTMLElement && !sib.inert) { sib.inert = true; inerted.push(sib); }
+      }
+    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") return setOpen(false);
       if (e.key !== "Tab") return;
@@ -228,7 +235,7 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
       else if (!panel!.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
     };
     window.addEventListener("keydown", onKey);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); };
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); inerted.forEach((el) => { el.inert = false; }); };
   }, [open, id]);
   useEffect(() => {
     if (open || !opener.current) return;
