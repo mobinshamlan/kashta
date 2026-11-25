@@ -809,6 +809,7 @@
     /* Keep the row so bars line up with "tonight", but hide names that don't fit. */
     .seven--compact li:not(:first-child) .seven-weekday { display: none; }
     .seven--compact .seven-weekday-short { display: block; font-size: 0.72rem; }
+    .seven--compact li:first-child .seven-weekday { font-size: 0.7rem; }
     .seven--compact .seven-day { font-size: 0.82rem; }
   }
 }
