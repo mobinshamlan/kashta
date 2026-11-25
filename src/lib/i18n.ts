@@ -1198,6 +1198,12 @@ export function formatWeekday(date: string, locale: Locale) {
   }).format(new Date(`${date}T12:00:00Z`));
 }
 
+/** A weekday short enough for seven phone columns: "Thu", or "خميس" without the article. */
+export function formatWeekdayShort(date: string, locale: Locale) {
+  if (locale === "ar") return formatWeekday(date, locale).replace(/^ال/, "");
+  return new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
+}
+
 export function formatDayMonth(date: string, locale: Locale) {
   return new Intl.DateTimeFormat(locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB", {
     day: "numeric",

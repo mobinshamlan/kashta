@@ -4,7 +4,7 @@ import { Check, Cloud, CloudFog, CloudRain, Moon, Thermometer, Wind } from "luci
 import type { NightSummary } from "@/lib/api-types";
 import type { NightPick } from "@/lib/reasons";
 import { getDestination } from "@/lib/destinations";
-import { formatDayMonth, formatNight, formatWeekday } from "@/lib/i18n";
+import { formatDayMonth, formatNight, formatWeekday, formatWeekdayShort } from "@/lib/i18n";
 import { useI18n } from "./locale-provider";
 import type { ScoreRow } from "@/lib/api-types";
 import type { Experience } from "@/lib/types";
@@ -76,6 +76,7 @@ export function SevenNights({
               {isBest && <span className="seven-best-tag" aria-hidden>{dict.home.sevenBest}</span>}
               <span className="seven-day w-full min-w-0" aria-hidden>
                 <span className="seven-weekday font-medium">{i === 0 ? dict.common.tonight : formatWeekday(night, locale)}</span>
+                {i > 0 && <span className="seven-weekday-short font-medium">{formatWeekdayShort(night, locale)}</span>}
                 <span className="block muted num whitespace-nowrap sm:hidden">{Number(night.slice(8))}</span>
                 <span className="hidden muted num whitespace-nowrap sm:block">{formatDayMonth(night, locale)}</span>
               </span>
