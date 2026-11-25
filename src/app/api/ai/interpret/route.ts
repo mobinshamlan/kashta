@@ -119,7 +119,15 @@ const inLanguage = (x: string, locale: Locale) => (locale === "ar" ? /[\u0600-\u
  * reply quotes a number the facts don't contain or drifts language; the chat then shows the
  * app's own reasons instead. Answering never changes preferences.
  */
+/** Things the app has no data on; answered plainly instead of letting the model guess. */
+const NO_DATA = /(?:أطفال|اطفال|عيال|دورات?\s*مياه|دورة\s*مياه|حمام|حمامات|خدمات|مرافق|kids?|child(?:ren)?|toilets?|restrooms?|bathrooms?|facilit(?:y|ies)|services)/iu;
+const NO_DATA_REPLY: Record<Locale, string> = {
+  ar: "ما عندنا معلومات عن المرافق أو مناسبة المكان للأطفال. شوف صفحة المكان أو دليل التخييم الرسمي.",
+  en: "KASHTA has no information on facilities or suitability for children. Check the place page or the official camping guide.",
+};
+
 async function answer(text: string, locale: Locale, context: { slug: string; date: string; prefs: PlanPrefs } | null): Promise<string | null> {
+  if (NO_DATA.test(text)) return NO_DATA_REPLY[locale];
   const plan = context ? await scorePlan(context.slug, context.date, context.prefs) : null;
   const facts = (plan && context ? answerFacts(plan, context.prefs, locale) : null) ?? { selectedPlace: null, note: context ? "The selected night is no longer in the seven-day forecast; ask them to pick a new night." : "The user has not picked a place and night yet." };
   const language = locale === "ar" ? "Arabic (natural Saudi tone, not heavy slang; units as °م، كم/س، ٪)" : "English";
@@ -133,7 +141,7 @@ Answer the user's question in ${language}, in at most three short sentences. Use
 - General kashta or stargazing questions in Saudi Arabia: brief, practical, no numbers, places or permit claims that are not in the facts.
 - If selectedPlace is null and the question is about the plan, ask them to pick a place and night first.
 - Temperatures: "evening" is early in the night and "coldest" is the lowest feels-like temperature before dawn. Never call the evening value the lowest.
-- Anything the facts don't cover (facilities, toilets, services, crowds, suitability for children): say KASHTA has no information on it and suggest the place page or the official guide. Never guess.
+- Anything the facts don't cover (facilities, toilets, services, crowds, suitability for children): say, in ${language}, that KASHTA has no information on it and suggest the place page or the official guide. Never guess.
 - Write every number with Western digits (0-9), also in Arabic.
 - Quote measurements with their units exactly as given. Never quote scores. Never invent weather, places, permits, reasons or measurements. Never write JSON field names.
 - Do not offer to change settings; this is only an answer.
