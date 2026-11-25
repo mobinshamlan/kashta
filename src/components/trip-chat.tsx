@@ -204,10 +204,21 @@ export function TripChat({ mode, prefs, data, dataKey, perNight, chosen, explain
     if (!open || !window.matchMedia("(max-width: 1199px)").matches) return;
     if (!opener.current) opener.current = document.activeElement as HTMLElement | null;
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })));
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return setOpen(false);
+      if (e.key !== "Tab") return;
+      // Keep Tab inside the sheet while it covers the page.
+      const panel = document.getElementById(`${id}-panel`);
+      const items = panel ? [...panel.querySelectorAll<HTMLElement>("button:not([disabled]), textarea, a[href], [tabindex='0']")] : [];
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      else if (!panel!.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener("keydown", onKey);
     return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); };
-  }, [open]);
+  }, [open, id]);
   useEffect(() => {
     if (open || !opener.current) return;
     const back = opener.current.isConnected && opener.current.offsetParent !== null ? opener.current : dockRef.current;
