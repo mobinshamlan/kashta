@@ -1,4 +1,4 @@
-import { hasInternalKey, collectNumbers, extractJson, keepGrounded } from "@/lib/ai-guards";
+import { hasInternalKey, collectNumbers, extractJson, keepGrounded, normaliseDigits } from "@/lib/ai-guards";
 import { DESTINATIONS, estimateDrive, getDestination } from "@/lib/destinations";
 import { apiError, fromException, privateJson, rateLimited, readJson } from "@/lib/http";
 import { chatLlama, llamaConfig } from "@/lib/llm";
@@ -66,7 +66,7 @@ Reply with ONE JSON object and nothing else:
 
     let raw: unknown;
     try {
-      raw = extractJson(reply.content);
+      raw = extractJson(normaliseDigits(reply.content));
     } catch {
       return apiError("ai_invalid_output", "Llama did not return JSON");
     }

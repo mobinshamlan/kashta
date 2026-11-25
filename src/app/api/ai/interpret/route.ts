@@ -1,4 +1,4 @@
-import { collectNumbers, extractJson, hasInternalKey, isGrounded } from "@/lib/ai-guards";
+import { collectNumbers, extractJson, hasInternalKey, isGrounded, normaliseDigits } from "@/lib/ai-guards";
 import { apiError, fromException, privateJson, rateLimited, readJson } from "@/lib/http";
 import { chatLlama, llamaConfig } from "@/lib/llm";
 import { upcomingNights } from "@/lib/nights";
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
     let raw: unknown;
     try {
-      raw = extractJson(reply.content);
+      raw = extractJson(normaliseDigits(reply.content));
     } catch {
       return apiError("ai_invalid_output", "Llama did not return JSON");
     }
@@ -132,6 +132,9 @@ Answer the user's question in ${language}, in at most three short sentences. Use
 - Drive: it is a rough estimate. Permit: repeat the permit facts only; never claim legality beyond them.
 - General kashta or stargazing questions in Saudi Arabia: brief, practical, no numbers, places or permit claims that are not in the facts.
 - If selectedPlace is null and the question is about the plan, ask them to pick a place and night first.
+- Temperatures: "evening" is early in the night and "coldest" is the lowest feels-like temperature before dawn. Never call the evening value the lowest.
+- Anything the facts don't cover (facilities, toilets, services, crowds, suitability for children): say KASHTA has no information on it and suggest the place page or the official guide. Never guess.
+- Write every number with Western digits (0-9), also in Arabic.
 - Quote measurements with their units exactly as given. Never quote scores. Never invent weather, places, permits, reasons or measurements. Never write JSON field names.
 - Do not offer to change settings; this is only an answer.
 Reply with ONE JSON object and nothing else: {"answer": string}
@@ -148,7 +151,7 @@ ${JSON.stringify(facts)}`;
   );
   let raw: unknown;
   try {
-    raw = extractJson(reply.content);
+    raw = extractJson(normaliseDigits(reply.content));
   } catch {
     return null;
   }
